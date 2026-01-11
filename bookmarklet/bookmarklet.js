@@ -1,7 +1,10 @@
 /**
- * Heading Detector Bookmarklet - Enhanced with Tree TOC Popup
+ * Heading Detector Bookmarklet - Enhanced for Gemini/NotebookLM Chat Navigation
  * 
- * スタイル解析で見出しを検出し、ツリー形式のポップアップで表示
+ * Features:
+ * - Auto-detect main content pane
+ * - Extract chat queries as headings
+ * - Search with hierarchical highlighting
  */
 
 javascript: (function () {
@@ -17,6 +20,7 @@ javascript: (function () {
         link: '#a8c7fa',
         hover: '#3c4043',
         highlight: 'rgba(255, 235, 59, 0.4)',
+        searchHighlight: 'rgba(255, 107, 107, 0.6)',
         btnText: '#c4c7c5',
         btnHover: '#4f545c',
         activeBtnBg: '#0b57d0',
@@ -26,7 +30,9 @@ javascript: (function () {
         h3: 'rgba(255, 220, 0, 0.8)',
         h4: 'rgba(72, 219, 251, 0.8)',
         h5: 'rgba(162, 155, 254, 0.8)',
-        h6: 'rgba(200, 200, 200, 0.8)'
+        h6: 'rgba(200, 200, 200, 0.8)',
+        query: 'rgba(100, 200, 255, 0.8)',
+        mainPane: 'rgba(100, 255, 100, 0.15)'
     };
 
     // 設定
@@ -34,9 +40,10 @@ javascript: (function () {
         level: 4,
         x: 20,
         y: 60,
-        width: 360,
+        width: 380,
         dock: 'none',
-        wrap: false
+        wrap: false,
+        searchQuery: ''
     };
 
     // 既存ウィジェットを削除
@@ -51,15 +58,114 @@ javascript: (function () {
         return el;
     }
 
+    // メインコンテンツペインの検出
+    function detectMainPane() {
+        var hostname = win.location.hostname;
+        var mainPane = null;
+
+        // Gemini
+        if (hostname.includes('gemini.google.com')) {
+            mainPane = doc.querySelector('.conversation-container, [class*="conversation"], main[role="main"], .chat-container');
+            if (!mainPane) {
+                var scrollables = Array.from(doc.querySelectorAll('*')).filter(function (el) {
+                    var style = win.getComputedStyle(el);
+                    return (style.overflowY === 'auto' || style.overflowY === 'scroll') &&
+                        el.scrollHeight > el.clientHeight * 1.5 &&
+                        el.clientWidth > win.innerWidth * 0.4;
+                });
+                scrollables.sort(function (a, b) {
+                    return (b.clientHeight * b.clientWidth) - (a.clientHeight * a.clientWidth);
+                });
+                mainPane = scrollables[0] || null;
+            }
+        }
+        // NotebookLM
+        else if (hostname.includes('notebooklm.google.com')) {
+            mainPane = doc.querySelector('[class*="chat"], [class*="conversation"], main, [role="main"]');
+        }
+        // 一般的なページ
+        else {
+            mainPane = doc.querySelector('main, [role="main"], article, .content, #content, .main');
+        }
+
+        return mainPane;
+    }
+
+    // チャットクエリ（ユーザーの発言）を検出
+    function detectChatQueries() {
+        var queries = [];
+        var hostname = win.location.hostname;
+
+        // Gemini用セレクタ
+        if (hostname.includes('gemini.google.com')) {
+            // ユーザーのメッセージを検出
+            var userMessages = doc.querySelectorAll('[data-message-author-role="user"], .user-message, [class*="user-query"], [class*="query-text"]');
+            userMessages.forEach(function (msg) {
+                var text = msg.textContent.trim();
+                if (text && text.length > 2 && text.length < 200) {
+                    queries.push({
+                        element: msg,
+                        text: text.substring(0, 100),
+                        level: 2, // H2相当
+                        isQuery: true,
+                        isNative: false
+                    });
+                }
+            });
+
+            // フォールバック: 太字かつ短いテキストをクエリ候補として検出
+            if (queries.length === 0) {
+                var candidates = doc.querySelectorAll('p, div');
+                candidates.forEach(function (el) {
+                    var style = win.getComputedStyle(el);
+                    var text = el.textContent.trim();
+                    if (parseInt(style.fontWeight) >= 500 &&
+                        text.length > 5 && text.length < 150 &&
+                        el.children.length <= 3) {
+                        // 親要素にuserやqueryのクラスがあるか確認
+                        var parent = el.closest('[class*="user"], [class*="query"], [class*="human"]');
+                        if (parent) {
+                            queries.push({
+                                element: el,
+                                text: text.substring(0, 100),
+                                level: 2,
+                                isQuery: true,
+                                isNative: false
+                            });
+                        }
+                    }
+                });
+            }
+        }
+
+        // NotebookLM用セレクタ
+        if (hostname.includes('notebooklm.google.com')) {
+            var userMsgs = doc.querySelectorAll('[class*="user"], [class*="query"], [class*="human-message"]');
+            userMsgs.forEach(function (msg) {
+                var text = msg.textContent.trim();
+                if (text && text.length > 2 && text.length < 200) {
+                    queries.push({
+                        element: msg,
+                        text: text.substring(0, 100),
+                        level: 2,
+                        isQuery: true,
+                        isNative: false
+                    });
+                }
+            });
+        }
+
+        return queries;
+    }
+
     // スクロールコンテナ取得
     function getScrollContainer() {
+        var mainPane = detectMainPane();
+        if (mainPane && mainPane.scrollHeight > mainPane.clientHeight) {
+            return mainPane;
+        }
         if (win.scrollY > 0 || doc.documentElement.scrollHeight > win.innerHeight) {
-            var main = doc.querySelector('main, [role="main"], .infinite-scroller');
-            if (main && main.scrollHeight > main.clientHeight) {
-                var style = getComputedStyle(main);
-                if (style.overflowY === 'scroll' || style.overflowY === 'auto') return main;
-            }
-            if (win.scrollY > 0) return win;
+            return win;
         }
         var candidates = Array.from(doc.querySelectorAll('*'));
         var scrollable = candidates.filter(function (el) {
@@ -100,13 +206,19 @@ javascript: (function () {
         }, 1500);
     }
 
+    // 要素がメインペイン内かどうか判定
+    function isInMainPane(element, mainPane) {
+        if (!mainPane) return false;
+        return mainPane.contains(element);
+    }
+
     // HeadingDetector コア
     var HeadingDetector = {
         config: {
             fontSizeRatio: 1.15,
             boldThreshold: 600,
             maxTextLength: 150,
-            maxHeadings: 100
+            maxHeadings: 150
         },
 
         getBaseFontSize: function () {
@@ -163,7 +275,7 @@ javascript: (function () {
             if (/heading|title|header|section-title|headline/i.test(ci)) score += 15;
 
             if (score < 40) return null;
-            return { element: element, text: text.substring(0, 100), level: level, score: score, isNative: false };
+            return { element: element, text: text.substring(0, 100), level: level, score: score, isNative: false, isQuery: false };
         },
 
         removeDuplicates: function (headings) {
@@ -190,10 +302,11 @@ javascript: (function () {
 
         detect: function () {
             var baseFontSize = this.getBaseFontSize();
-            var existingHeadings = document.querySelectorAll('h1, h2, h3, h4, h5, h6');
+            var existingHeadings = document.querySelectorAll('h1, h2, h3, h4, h5, h6, [role="heading"]');
             var candidates = [];
             var selectors = 'p, div, span, li, td, th, a, strong, b, em, article, section, header, footer, main, aside, nav, label';
             var elements = document.querySelectorAll(selectors);
+            var mainPane = detectMainPane();
 
             for (var i = 0; i < elements.length; i++) {
                 var element = elements[i];
@@ -206,7 +319,10 @@ javascript: (function () {
                 }
                 if (isInsideHeading) continue;
                 var result = this.isHeadingCandidate(element, baseFontSize);
-                if (result) candidates.push(result);
+                if (result) {
+                    result.isInMainPane = isInMainPane(element, mainPane);
+                    candidates.push(result);
+                }
             }
 
             candidates.sort(function (a, b) { return b.score - a.score; });
@@ -220,12 +336,15 @@ javascript: (function () {
                 var h = existingHeadings[k];
                 var text = h.textContent.trim();
                 if (text) {
+                    var lvl = h.tagName.match(/^H([1-6])$/) ? parseInt(h.tagName.charAt(1)) : (parseInt(h.getAttribute('aria-level')) || 3);
                     allHeadings.push({
                         element: h,
                         text: text.substring(0, 100),
-                        level: parseInt(h.tagName.charAt(1)),
+                        level: lvl,
                         score: 100,
-                        isNative: true
+                        isNative: true,
+                        isQuery: false,
+                        isInMainPane: isInMainPane(h, mainPane)
                     });
                 }
             }
@@ -234,6 +353,13 @@ javascript: (function () {
             for (var m = 0; m < Math.min(filtered.length, this.config.maxHeadings); m++) {
                 allHeadings.push(filtered[m]);
             }
+
+            // チャットクエリを追加
+            var queries = detectChatQueries();
+            queries.forEach(function (q) {
+                q.isInMainPane = isInMainPane(q.element, mainPane);
+                allHeadings.push(q);
+            });
 
             // DOMの出現順にソート
             allHeadings.sort(function (a, b) {
@@ -247,6 +373,7 @@ javascript: (function () {
 
     // 検出実行
     var headings = HeadingDetector.detect();
+    var mainPane = detectMainPane();
 
     // ウィジェット作成
     var container = createEl('div', '');
@@ -319,6 +446,25 @@ javascript: (function () {
     topRow.appendChild(ctrlGroup);
     header.appendChild(topRow);
 
+    // 検索欄
+    var searchRow = createEl('div', 'display:flex;gap:6px;align-items:center;');
+    searchRow.onmousedown = function (e) { e.stopPropagation(); };
+    var searchInput = createEl('input', 'flex:1;padding:6px 10px;border:1px solid ' + THEME.border + ';border-radius:4px;background:#2a2a2a;color:' + THEME.text + ';font-size:12px;outline:none;');
+    searchInput.type = 'text';
+    searchInput.placeholder = '🔎 見出しを検索...';
+    searchInput.oninput = function () {
+        config.searchQuery = this.value.trim().toLowerCase();
+        renderTree();
+    };
+    var searchClear = createBtn('✕', 'クリア', function () {
+        searchInput.value = '';
+        config.searchQuery = '';
+        renderTree();
+    });
+    searchRow.appendChild(searchInput);
+    searchRow.appendChild(searchClear);
+    header.appendChild(searchRow);
+
     // 展開レベル選択
     var filterRow = createEl('div', 'display:flex;align-items:center;gap:6px;cursor:default;');
     filterRow.onmousedown = function (e) { e.stopPropagation(); };
@@ -355,7 +501,10 @@ javascript: (function () {
     header.appendChild(filterRow);
 
     // 件数表示
-    var countRow = createEl('div', 'font-size:11px;color:' + THEME.btnText + ';', '📌 ネイティブ: ' + headings.filter(function (h) { return h.isNative; }).length + ' 件  ✨ 検出: ' + headings.filter(function (h) { return !h.isNative; }).length + ' 件');
+    var mainCount = headings.filter(function (h) { return h.isInMainPane; }).length;
+    var queryCount = headings.filter(function (h) { return h.isQuery; }).length;
+    var countRow = createEl('div', 'font-size:11px;color:' + THEME.btnText + ';',
+        '🎯 メイン: ' + mainCount + ' 件  💬 クエリ: ' + queryCount + ' 件  📌 全体: ' + headings.length + ' 件');
     header.appendChild(countRow);
 
     container.appendChild(header);
@@ -364,12 +513,26 @@ javascript: (function () {
     var content = createEl('div', 'flex-grow:1;overflow-y:auto;padding:12px;background:' + THEME.bg + ';');
     container.appendChild(content);
 
+    // 検索マッチング（ノードとその親にマッチフラグをセット）
+    function markSearchMatches(nodes, query) {
+        if (!query) return false;
+        var hasMatch = false;
+        nodes.forEach(function (node) {
+            var textMatch = node.heading.text.toLowerCase().includes(query);
+            var childMatch = node.children.length > 0 ? markSearchMatches(node.children, query) : false;
+            node.searchMatch = textMatch;
+            node.hasMatchInChildren = childMatch;
+            if (textMatch || childMatch) hasMatch = true;
+        });
+        return hasMatch;
+    }
+
     // ツリー構築
     function buildTree(elements) {
         var root = { children: [] };
         var stack = [{ level: 0, node: root }];
         elements.forEach(function (el) {
-            var node = { heading: el, level: el.level, children: [] };
+            var node = { heading: el, level: el.level, children: [], searchMatch: false, hasMatchInChildren: false };
             while (stack.length > 1 && stack[stack.length - 1].level >= el.level) stack.pop();
             stack[stack.length - 1].node.children.push(node);
             stack.push({ level: el.level, node: node });
@@ -377,11 +540,12 @@ javascript: (function () {
         return root.children;
     }
 
-    function getLevelColor(level) {
+    function getLevelColor(level, isQuery) {
+        if (isQuery) return THEME.query;
         return THEME['h' + level] || THEME.h6;
     }
 
-    function createTreeDom(nodes, depth) {
+    function createTreeDom(nodes, depth, inMainPane) {
         if (nodes.length === 0) return null;
         var ul = document.createElement('ul');
         ul.style.cssText = 'list-style:none;padding-left:' + (depth === 0 ? '0' : '18px') + ';margin:0;';
@@ -394,15 +558,30 @@ javascript: (function () {
             row.style.cssText = 'display:flex;align-items:flex-start;gap:6px;';
 
             var hasChildren = node.children.length > 0;
-            var isCollapsed = (node.level >= config.level);
+            var isMain = node.heading.isInMainPane;
+
+            // メインペイン内はH3まで展開、それ以外はH2まで
+            var collapseLevel = isMain ? 4 : 2;
+            var isCollapsed = (node.level >= collapseLevel) || (!isMain && node.level >= 2);
+
+            // 検索でマッチした場合は展開
+            if (config.searchQuery && (node.searchMatch || node.hasMatchInChildren)) {
+                isCollapsed = false;
+            }
 
             var toggle = document.createElement('span');
             toggle.textContent = hasChildren ? (isCollapsed ? '▶' : '▼') : '•';
             toggle.style.cssText = 'cursor:' + (hasChildren ? 'pointer' : 'default') + ';color:' + (hasChildren ? THEME.btnText : '#555') + ';font-size:10px;margin-top:3px;width:12px;flex-shrink:0;user-select:none;';
 
             var levelBadge = document.createElement('span');
-            levelBadge.textContent = (node.heading.isNative ? '' : '✨') + 'H' + node.level;
-            levelBadge.style.cssText = 'flex-shrink:0;font-size:9px;padding:2px 5px;border-radius:3px;background:' + getLevelColor(node.level) + ';color:#fff;font-weight:bold;';
+            var badgeText = node.heading.isQuery ? '💬' : ((node.heading.isNative ? '' : '✨') + 'H' + node.level);
+            levelBadge.textContent = badgeText;
+            levelBadge.style.cssText = 'flex-shrink:0;font-size:9px;padding:2px 5px;border-radius:3px;background:' + getLevelColor(node.level, node.heading.isQuery) + ';color:#fff;font-weight:bold;';
+
+            // メインペインのバッジを区別
+            if (isMain) {
+                levelBadge.style.boxShadow = '0 0 0 2px rgba(100, 255, 100, 0.5)';
+            }
 
             var link = document.createElement('a');
             link.textContent = node.heading.text.replace(/\s+/g, ' ');
@@ -412,8 +591,26 @@ javascript: (function () {
                 link.style.overflow = 'hidden';
                 link.style.textOverflow = 'ellipsis';
                 link.style.display = 'block';
-                link.style.maxWidth = '200px';
+                link.style.maxWidth = '220px';
             }
+
+            // 検索ハイライト
+            if (config.searchQuery) {
+                if (node.searchMatch) {
+                    // 直接マッチ
+                    row.style.background = THEME.searchHighlight;
+                    row.style.borderRadius = '4px';
+                    row.style.padding = '2px 4px';
+                    row.style.margin = '-2px -4px';
+                } else if (node.hasMatchInChildren && isCollapsed) {
+                    // 子にマッチがあり、折りたたまれている場合
+                    row.style.background = 'rgba(255, 107, 107, 0.3)';
+                    row.style.borderRadius = '4px';
+                    row.style.padding = '2px 4px';
+                    row.style.margin = '-2px -4px';
+                }
+            }
+
             link.onclick = function (e) {
                 e.preventDefault();
                 smartScrollTo(node.heading.element);
@@ -423,14 +620,34 @@ javascript: (function () {
 
             var childContainer = null;
             if (hasChildren) {
-                childContainer = createTreeDom(node.children, depth + 1);
+                childContainer = createTreeDom(node.children, depth + 1, isMain);
                 childContainer.style.display = isCollapsed ? 'none' : 'block';
                 childContainer.style.marginTop = '6px';
+
+                var updateHighlightOnToggle = function () {
+                    // 展開時にハイライトを更新
+                    if (childContainer.style.display === 'block') {
+                        if (node.hasMatchInChildren && !node.searchMatch) {
+                            row.style.background = '';
+                            row.style.padding = '';
+                            row.style.margin = '';
+                        }
+                    } else {
+                        if (node.hasMatchInChildren && !node.searchMatch && config.searchQuery) {
+                            row.style.background = 'rgba(255, 107, 107, 0.3)';
+                            row.style.borderRadius = '4px';
+                            row.style.padding = '2px 4px';
+                            row.style.margin = '-2px -4px';
+                        }
+                    }
+                };
+
                 toggle.onclick = function (e) {
                     e.stopPropagation();
                     var hidden = childContainer.style.display === 'none';
                     childContainer.style.display = hidden ? 'block' : 'none';
                     toggle.textContent = hidden ? '▼' : '▶';
+                    updateHighlightOnToggle();
                 };
             }
 
@@ -451,14 +668,20 @@ javascript: (function () {
             return;
         }
         var tree = buildTree(headings);
-        var dom = createTreeDom(tree, 0);
+
+        // 検索マッチをマーク
+        if (config.searchQuery) {
+            markSearchMatches(tree, config.searchQuery);
+        }
+
+        var dom = createTreeDom(tree, 0, false);
         if (dom) content.appendChild(dom);
     }
 
     // ドラッグ & ドロップ
     var isDrag = false, startX, startY, initLeft, initTop;
     header.onmousedown = function (e) {
-        if (e.target.tagName === 'BUTTON') return;
+        if (e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT') return;
         isDrag = true;
         startX = e.clientX;
         startY = e.clientY;
