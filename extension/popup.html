@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Heading Detector</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <h1>🔍 Heading Detector</h1>
+      <p class="subtitle">スタイル解析による見出し検出</p>
+    </header>
+
+    <div class="actions">
+      <button id="detectBtn" class="btn btn-primary">
+        <span class="icon">▶</span>
+        見出しを検出
+      </button>
+      <button id="clearBtn" class="btn btn-secondary" disabled>
+        <span class="icon">✕</span>
+        クリア
+      </button>
+    </div>
+
+    <div id="status" class="status"></div>
+
+    <div id="results" class="results" style="display: none;">
+      <div class="results-header">
+        <span id="resultCount">0</span> 件の見出しを検出
+      </div>
+      <ul id="headingList" class="heading-list"></ul>
+    </div>
+
+    <footer class="footer">
+      <span class="legend">
+        <span class="badge native">📌 ネイティブ</span>
+        <span class="badge detected">✨ 検出</span>
+      </span>
+    </footer>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

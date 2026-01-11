@@ -1,0 +1,224 @@
+:root {
+  --bg-primary: #1a1a2e;
+  --bg-secondary: #16213e;
+  --bg-tertiary: #0f3460;
+  --text-primary: #eee;
+  --text-secondary: #aaa;
+  --accent-primary: #e94560;
+  --accent-secondary: #0f3460;
+  --accent-gradient: linear-gradient(135deg, #e94560 0%, #ff6b6b 100%);
+  --success: #00d9a0;
+  --warning: #ffd93d;
+  --border-radius: 8px;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  width: 320px;
+  min-height: 200px;
+}
+
+.container {
+  padding: 16px;
+}
+
+.header {
+  text-align: center;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--bg-tertiary);
+}
+
+.header h1 {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 4px;
+  background: var(--accent-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.subtitle {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 16px;
+  border: none;
+  border-radius: var(--border-radius);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: var(--accent-gradient);
+  color: white;
+}
+
+.btn-primary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(233, 69, 96, 0.4);
+}
+
+.btn-secondary {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: var(--bg-secondary);
+}
+
+.icon {
+  font-size: 10px;
+}
+
+.status {
+  text-align: center;
+  padding: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  min-height: 20px;
+}
+
+.status.success {
+  color: var(--success);
+}
+
+.status.error {
+  color: var(--accent-primary);
+}
+
+.results {
+  margin-top: 12px;
+}
+
+.results-header {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+  padding: 6px 10px;
+  background: var(--bg-secondary);
+  border-radius: var(--border-radius);
+}
+
+.heading-list {
+  list-style: none;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.heading-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.heading-list::-webkit-scrollbar-track {
+  background: var(--bg-secondary);
+  border-radius: 3px;
+}
+
+.heading-list::-webkit-scrollbar-thumb {
+  background: var(--bg-tertiary);
+  border-radius: 3px;
+}
+
+.heading-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  margin-bottom: 4px;
+  background: var(--bg-secondary);
+  border-radius: var(--border-radius);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border-left: 3px solid transparent;
+}
+
+.heading-item:hover {
+  background: var(--bg-tertiary);
+  transform: translateX(2px);
+}
+
+.heading-item.h1 { border-left-color: rgba(255, 107, 107, 0.8); }
+.heading-item.h2 { border-left-color: rgba(255, 159, 67, 0.8); }
+.heading-item.h3 { border-left-color: rgba(255, 220, 0, 0.8); }
+.heading-item.h4 { border-left-color: rgba(72, 219, 251, 0.8); }
+.heading-item.h5 { border-left-color: rgba(162, 155, 254, 0.8); }
+.heading-item.h6 { border-left-color: rgba(200, 200, 200, 0.8); }
+
+.heading-level {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+}
+
+.heading-text {
+  flex: 1;
+  font-size: 12px;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.heading-type {
+  flex-shrink: 0;
+  font-size: 10px;
+}
+
+.footer {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--bg-tertiary);
+  text-align: center;
+}
+
+.legend {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+}
+
+.badge {
+  font-size: 10px;
+  color: var(--text-secondary);
+}
+
+.badge.native {
+  color: var(--warning);
+}
+
+.badge.detected {
+  color: var(--success);
+}
