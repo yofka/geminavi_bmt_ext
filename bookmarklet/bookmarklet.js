@@ -192,8 +192,8 @@ javascript: (function () {
         var rect = targetEl.getBoundingClientRect();
         var containerTop = isWindow ? 0 : container.getBoundingClientRect().top;
         var targetTopRel = currentScroll + rect.top - containerTop;
-        var viewHeight = isWindow ? win.innerHeight : container.clientHeight;
-        var targetScrollPos = targetTopRel - (viewHeight / 2) + (rect.height / 2);
+        // 見出しを画面上部に表示（20pxのマージン）
+        var targetScrollPos = targetTopRel - 20;
 
         if (isWindow) win.scrollTo({ top: targetScrollPos, behavior: 'smooth' });
         else container.scrollTo({ top: targetScrollPos, behavior: 'smooth' });
