@@ -146,7 +146,7 @@ javascript: (function () {
                     items.push({
                         element: firstPara,
                         text: text,
-                        level: 3,
+                        level: 2.5,  // H2とH3の間（応答内のH3〜H6がこの下にぶら下がる）
                         isQuery: false,
                         isResponse: true,
                         isNative: false,

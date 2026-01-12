@@ -2,7 +2,8 @@
  * Heading Detector - Content Script
  * 
  * Chrome拡張機能として実行されるスクリプト
- * CSP制限のあるページでも動作するように設計
+ * ブックマークレット版と機能を同期
+ * Version 2.0 - Enhanced for Gemini/NotebookLM Chat Navigation
  */
 
 (function () {
@@ -20,8 +21,144 @@
                 h3: 'rgba(255, 220, 0, 0.3)',
                 h4: 'rgba(72, 219, 251, 0.3)',
                 h5: 'rgba(162, 155, 254, 0.3)',
-                h6: 'rgba(200, 200, 200, 0.3)'
+                h6: 'rgba(200, 200, 200, 0.3)',
+                query: 'rgba(100, 200, 255, 0.3)',
+                response: 'rgba(180, 130, 255, 0.3)'
             }
+        },
+
+        mainPane: null,
+
+        // メインコンテンツペインの検出（幅が最も広いスクロール可能ペイン）
+        detectMainPane: function () {
+            const hostname = window.location.hostname;
+
+            // すべてのスクロール可能要素を収集
+            const allScrollables = Array.from(document.querySelectorAll('*')).filter(function (el) {
+                const style = window.getComputedStyle(el);
+                const isScrollable = (style.overflowY === 'auto' || style.overflowY === 'scroll');
+                const hasScroll = el.scrollHeight > el.clientHeight + 50;
+                const isVisible = el.offsetParent !== null || el === document.body;
+                return isScrollable && hasScroll && isVisible;
+            });
+
+            // 幅でソート（最も広いものを優先）
+            allScrollables.sort(function (a, b) {
+                return b.clientWidth - a.clientWidth;
+            });
+
+            // 幅が画面の40%以上のものを優先
+            const mainCandidates = allScrollables.filter(function (el) {
+                return el.clientWidth > window.innerWidth * 0.4;
+            });
+
+            if (mainCandidates.length > 0) {
+                return mainCandidates[0];
+            }
+
+            // フォールバック: 一般的なセレクタ
+            if (hostname.includes('gemini.google.com')) {
+                return document.querySelector('main[role="main"]') || allScrollables[0] || null;
+            }
+            if (hostname.includes('notebooklm.google.com')) {
+                return document.querySelector('main, [role="main"]') || allScrollables[0] || null;
+            }
+
+            return document.querySelector('main, [role="main"], article') || allScrollables[0] || null;
+        },
+
+        // 要素がメインペイン内にあるかチェック
+        isInMainPane: function (element) {
+            if (!this.mainPane) return false;
+            return this.mainPane.contains(element);
+        },
+
+        // Geminiのチャット要素を検出
+        detectGeminiChatItems: function () {
+            const items = [];
+            const hostname = window.location.hostname;
+
+            if (!hostname.includes('gemini.google.com')) return items;
+
+            // ユーザーのクエリ（H2タグ）を検出
+            const queryHeadings = document.querySelectorAll('h2');
+            queryHeadings.forEach((h2) => {
+                if (this.mainPane && !this.mainPane.contains(h2)) return;
+
+                const text = h2.textContent.trim();
+                if (text && text.length > 2) {
+                    items.push({
+                        element: h2,
+                        text: text.substring(0, 100),
+                        level: 2,
+                        isQuery: true,
+                        isResponse: false,
+                        isNative: true,
+                        isInMainPane: true
+                    });
+                }
+            });
+
+            // AIの回答（model-response）の冒頭部分を検出
+            const modelResponses = document.querySelectorAll('[data-message-author-role="model"], .model-response, [class*="model-response"]');
+            modelResponses.forEach((resp) => {
+                if (this.mainPane && !this.mainPane.contains(resp)) return;
+
+                // 回答内の最初の段落またはテキストブロックを取得
+                let firstPara = resp.querySelector('p, .markdown-content > *:first-child, [class*="response-text"] > *:first-child');
+                if (!firstPara) {
+                    // フォールバック: 直接のテキストノードを探す
+                    const walker = document.createTreeWalker(resp, NodeFilter.SHOW_TEXT, null, false);
+                    const firstText = walker.nextNode();
+                    if (firstText && firstText.textContent.trim().length > 10) {
+                        firstPara = firstText.parentElement;
+                    }
+                }
+
+                if (firstPara) {
+                    let text = firstPara.textContent.trim();
+                    // 最初の一文を抽出（。や.で終わる最初の文）
+                    const firstSentence = text.match(/^[^。.!?！？]+[。.!?！？]?/);
+                    if (firstSentence) {
+                        text = firstSentence[0];
+                    }
+                    if (text.length > 100) {
+                        text = text.substring(0, 97) + '...';
+                    }
+
+                    if (text && text.length > 5) {
+                        items.push({
+                            element: firstPara,
+                            text: text,
+                            level: 2.5,  // H2とH3の間（応答内のH3〜H6がこの下にぶら下がる）
+                            isQuery: false,
+                            isResponse: true,
+                            isNative: false,
+                            isInMainPane: true
+                        });
+                    }
+                }
+
+                // 回答内のHタグも見出しとして抽出
+                const responseHeadings = resp.querySelectorAll('h1, h2, h3, h4, h5, h6');
+                responseHeadings.forEach((h) => {
+                    const text = h.textContent.trim();
+                    const lvl = parseInt(h.tagName.charAt(1));
+                    if (text && text.length > 2) {
+                        items.push({
+                            element: h,
+                            text: text.substring(0, 100),
+                            level: lvl,
+                            isQuery: false,
+                            isResponse: false,
+                            isNative: true,
+                            isInMainPane: true
+                        });
+                    }
+                });
+            });
+
+            return items;
         },
 
         getBaseFontSize: function () {
@@ -39,10 +176,9 @@
             const style = window.getComputedStyle(element);
             const fontSize = parseFloat(style.fontSize);
             const fontWeight = parseInt(style.fontWeight) || 400;
-            const display = style.display;
             const text = element.textContent.trim();
 
-            if (!text || text.length > this.config.maxTextLength || text.length < 2) {
+            if (!text || text.length > this.config.maxTextLength || text.length < 3) {
                 return null;
             }
 
@@ -52,8 +188,8 @@
 
             const isBigger = fontSize >= baseFontSize * this.config.fontSizeRatio;
             const isBold = fontWeight >= this.config.boldThreshold;
-            const isBlock = ['block', 'flex', 'grid', 'list-item'].includes(display) ||
-                display.startsWith('table');
+
+            if (!isBigger && !isBold) return null;
 
             let score = 0;
             let level = 6;
@@ -73,23 +209,8 @@
                 if (level > 3) level = Math.max(level - 1, 1);
             }
 
-            if (isBlock) score += 15;
-
-            const marginTop = parseFloat(style.marginTop) || 0;
-            const marginBottom = parseFloat(style.marginBottom) || 0;
-            const paddingTop = parseFloat(style.paddingTop) || 0;
-            const paddingBottom = parseFloat(style.paddingBottom) || 0;
-
-            if (marginTop > 10 || paddingTop > 10) score += 10;
-            if (marginBottom > 5 || paddingBottom > 5) score += 5;
-
+            if (['block', 'flex', 'grid'].includes(style.display)) score += 15;
             if (text.length <= 50) score += 10;
-            if (text.length <= 20) score += 5;
-
-            const classAndId = (element.className + ' ' + element.id).toLowerCase();
-            if (/heading|title|header|section-title|headline/i.test(classAndId)) {
-                score += 15;
-            }
 
             if (score < 40) {
                 return null;
@@ -100,92 +221,98 @@
                 text: text.substring(0, 100),
                 level: level,
                 score: score,
-                fontSize: fontSize,
-                fontWeight: fontWeight
+                isNative: false,
+                isQuery: false,
+                isResponse: false,
+                isInMainPane: this.isInMainPane(element)
             };
         },
 
-        removeDuplicates: function (headings) {
-            const result = [];
-            const elements = headings.map(h => h.element);
-
-            for (const heading of headings) {
-                let isDuplicate = false;
-
-                for (const other of elements) {
-                    if (heading.element === other) continue;
-
-                    if (heading.element.contains(other) || other.contains(heading.element)) {
-                        const otherHeading = headings.find(h => h.element === other);
-                        if (other.contains(heading.element) && otherHeading.score >= heading.score) {
-                            isDuplicate = true;
-                            break;
-                        }
-                    }
-                }
-
-                if (!isDuplicate) {
-                    result.push(heading);
-                }
-            }
-
-            return result;
-        },
-
-        detect: function (options = {}) {
-            const config = { ...this.config, ...options };
-            const baseFontSize = this.getBaseFontSize();
-
-            const existingHeadings = document.querySelectorAll('h1, h2, h3, h4, h5, h6');
-            const candidates = [];
-            const selectors = 'p, div, span, li, td, th, a, strong, b, em, article, section, header, footer, main, aside, nav, label';
-            const elements = document.querySelectorAll(selectors);
-
-            for (const element of elements) {
-                let isInsideHeading = false;
-                for (const h of existingHeadings) {
-                    if (h.contains(element)) {
-                        isInsideHeading = true;
-                        break;
-                    }
-                }
-                if (isInsideHeading) continue;
-
-                const result = this.isHeadingCandidate(element, baseFontSize);
-                if (result) {
-                    candidates.push(result);
-                }
-            }
-
-            candidates.sort((a, b) => b.score - a.score);
-            const topCandidates = candidates.slice(0, config.maxHeadings * 2);
-            const filtered = this.removeDuplicates(topCandidates);
-
-            filtered.sort((a, b) => {
-                const pos = a.element.compareDocumentPosition(b.element);
-                return pos & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1;
-            });
+        detect: function () {
+            // メインペインを検出
+            this.mainPane = this.detectMainPane();
 
             const allHeadings = [];
+            const hostname = window.location.hostname;
+            const addedElements = new Set();
 
-            for (const h of existingHeadings) {
+            // Gemini専用のチャット検出
+            if (hostname.includes('gemini.google.com')) {
+                const chatItems = this.detectGeminiChatItems();
+                chatItems.forEach((item) => {
+                    if (!addedElements.has(item.element)) {
+                        addedElements.add(item.element);
+                        allHeadings.push(item);
+                    }
+                });
+            }
+
+            // ネイティブ見出し（H1-H6）を検出
+            const nativeHeadings = document.querySelectorAll('h1, h2, h3, h4, h5, h6, [role="heading"]');
+            nativeHeadings.forEach((h) => {
+                if (addedElements.has(h)) return;
+
                 const text = h.textContent.trim();
-                if (text) {
-                    allHeadings.push({
-                        element: h,
-                        text: text.substring(0, 100),
-                        level: parseInt(h.tagName.charAt(1)),
-                        score: 100,
-                        isNative: true
+                if (!text || text.length < 2) return;
+
+                const lvl = h.tagName.match(/^H([1-6])$/) ? parseInt(h.tagName.charAt(1)) : (parseInt(h.getAttribute('aria-level')) || 3);
+                const inMain = this.isInMainPane(h);
+
+                addedElements.add(h);
+                allHeadings.push({
+                    element: h,
+                    text: text.substring(0, 100),
+                    level: lvl,
+                    score: 100,
+                    isNative: true,
+                    isQuery: false,
+                    isResponse: false,
+                    isInMainPane: inMain
+                });
+            });
+
+            // スタイル解析による見出し検出（Gemini以外、またはメインペインがない場合）
+            if (!hostname.includes('gemini.google.com') || !this.mainPane) {
+                const baseFontSize = this.getBaseFontSize();
+                const selectors = 'p, div, span, li, strong, b, em';
+                const elements = document.querySelectorAll(selectors);
+
+                const candidates = [];
+                elements.forEach((el) => {
+                    if (addedElements.has(el)) return;
+
+                    // 見出しタグ内の要素はスキップ
+                    let insideHeading = false;
+                    nativeHeadings.forEach((h) => {
+                        if (h.contains(el)) insideHeading = true;
                     });
-                }
+                    if (insideHeading) return;
+
+                    const result = this.isHeadingCandidate(el, baseFontSize);
+                    if (result) {
+                        candidates.push(result);
+                    }
+                });
+
+                // スコア順にソート
+                candidates.sort((a, b) => b.score - a.score);
+
+                // 重複削除して追加
+                candidates.forEach((c) => {
+                    let isDup = false;
+                    addedElements.forEach((added) => {
+                        if (added.contains(c.element) || c.element.contains(added)) {
+                            isDup = true;
+                        }
+                    });
+                    if (!isDup) {
+                        addedElements.add(c.element);
+                        allHeadings.push(c);
+                    }
+                });
             }
 
-            for (const heading of filtered.slice(0, config.maxHeadings)) {
-                heading.isNative = false;
-                allHeadings.push(heading);
-            }
-
+            // DOMの出現順にソート
             allHeadings.sort((a, b) => {
                 const pos = a.element.compareDocumentPosition(b.element);
                 return pos & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1;
@@ -197,39 +324,67 @@
         highlight: function (headings) {
             this.clearHighlight();
 
-            for (const heading of headings) {
+            headings.forEach((heading, index) => {
                 const el = heading.element;
-                const level = 'h' + heading.level;
-                const color = this.config.highlightColors[level] || this.config.highlightColors.h6;
+                let colorKey = 'h' + heading.level;
+                if (heading.isQuery) colorKey = 'query';
+                if (heading.isResponse) colorKey = 'response';
+
+                const color = this.config.highlightColors[colorKey] || this.config.highlightColors.h6;
 
                 el.style.outline = '2px solid ' + color.replace('0.3', '0.8');
                 el.style.backgroundColor = color;
                 el.dataset.headingDetected = 'true';
                 el.dataset.headingLevel = heading.level;
-                el.dataset.headingIndex = headings.indexOf(heading);
-            }
+                el.dataset.headingIndex = index;
+            });
         },
 
         clearHighlight: function () {
             const highlighted = document.querySelectorAll('[data-heading-detected="true"]');
-            for (const el of highlighted) {
+            highlighted.forEach((el) => {
                 el.style.outline = '';
                 el.style.backgroundColor = '';
                 delete el.dataset.headingDetected;
                 delete el.dataset.headingLevel;
                 delete el.dataset.headingIndex;
+            });
+        },
+
+        getScrollContainer: function () {
+            if (this.mainPane && this.mainPane.scrollHeight > this.mainPane.clientHeight) {
+                return this.mainPane;
             }
+            return window;
         },
 
         scrollToHeading: function (index) {
             const el = document.querySelector(`[data-heading-index="${index}"]`);
             if (el) {
-                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                const container = this.getScrollContainer();
+                const isWindow = (container === window);
+                const currentScroll = isWindow ? window.scrollY : container.scrollTop;
+                const rect = el.getBoundingClientRect();
+                const containerTop = isWindow ? 0 : container.getBoundingClientRect().top;
+                const targetTopRel = currentScroll + rect.top - containerTop;
+                // 見出しを画面上部に表示（20pxのマージン）
+                const targetScrollPos = targetTopRel - 20;
+
+                if (isWindow) {
+                    window.scrollTo({ top: targetScrollPos, behavior: 'smooth' });
+                } else {
+                    container.scrollTo({ top: targetScrollPos, behavior: 'smooth' });
+                }
+
                 // 一時的にハイライトを強調
-                const originalOutline = el.style.outline;
-                el.style.outline = '4px solid #ff6b6b';
+                const originalBg = el.style.backgroundColor;
+                el.style.transition = 'background 0.3s ease-out';
+                el.style.backgroundColor = 'rgba(255, 235, 59, 0.4)';
                 setTimeout(() => {
-                    el.style.outline = originalOutline;
+                    el.style.backgroundColor = originalBg;
+                    setTimeout(() => {
+                        el.style.transition = '';
+                    }, 300);
                 }, 1500);
             }
         }
@@ -250,7 +405,10 @@
                 text: h.text,
                 level: h.level,
                 score: h.score,
-                isNative: h.isNative
+                isNative: h.isNative,
+                isQuery: h.isQuery,
+                isResponse: h.isResponse,
+                isInMainPane: h.isInMainPane
             }));
 
             sendResponse({ success: true, headings: result });

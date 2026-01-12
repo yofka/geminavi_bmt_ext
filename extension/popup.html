@@ -24,19 +24,27 @@
       </button>
     </div>
 
+    <div class="search-row">
+      <input type="text" id="searchInput" class="search-input" placeholder="🔎 見出しを検索...">
+      <button id="searchClear" class="btn btn-small">✕</button>
+    </div>
+
     <div id="status" class="status"></div>
 
     <div id="results" class="results" style="display: none;">
       <div class="results-header">
         <span id="resultCount">0</span> 件の見出しを検出
       </div>
-      <ul id="headingList" class="heading-list"></ul>
+      <div id="statsInfo" class="stats-info" style="display: none;"></div>
+      <div id="headingList" class="heading-list"></div>
     </div>
 
     <footer class="footer">
       <span class="legend">
         <span class="badge native">📌 ネイティブ</span>
         <span class="badge detected">✨ 検出</span>
+        <span class="badge query">💬 クエリ</span>
+        <span class="badge response">💭 回答</span>
       </span>
     </footer>
   </div>
