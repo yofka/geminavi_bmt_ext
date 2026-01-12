@@ -1,17 +1,12 @@
 /**
  * Heading Detector Bookmarklet - Enhanced for Gemini/NotebookLM Chat Navigation
- * 
- * Features:
- * - Auto-detect main content pane
- * - Extract chat queries as headings
- * - Search with hierarchical highlighting
+ * Version 2.0 - Fixed main pane detection and chat extraction
  */
 
 javascript: (function () {
     var WIDGET_ID = 'heading-detector-widget';
     var doc = document, win = window;
 
-    // テーマ設定
     var THEME = {
         bg: '#1e1e1e',
         text: '#e3e3e3',
@@ -32,10 +27,9 @@ javascript: (function () {
         h5: 'rgba(162, 155, 254, 0.8)',
         h6: 'rgba(200, 200, 200, 0.8)',
         query: 'rgba(100, 200, 255, 0.8)',
-        mainPane: 'rgba(100, 255, 100, 0.15)'
+        response: 'rgba(180, 130, 255, 0.8)'
     };
 
-    // 設定
     var config = {
         level: 4,
         x: 20,
@@ -46,11 +40,9 @@ javascript: (function () {
         searchQuery: ''
     };
 
-    // 既存ウィジェットを削除
     var existing = document.getElementById(WIDGET_ID);
     if (existing) existing.remove();
 
-    // ユーティリティ関数
     function createEl(tag, styles, text) {
         var el = document.createElement(tag);
         if (styles) el.style.cssText = styles;
@@ -58,128 +50,141 @@ javascript: (function () {
         return el;
     }
 
-    // メインコンテンツペインの検出
+    // メインコンテンツペインの検出（幅が最も広いスクロール可能ペイン）
     function detectMainPane() {
         var hostname = win.location.hostname;
-        var mainPane = null;
 
-        // Gemini
+        // すべてのスクロール可能要素を収集
+        var allScrollables = Array.from(doc.querySelectorAll('*')).filter(function (el) {
+            var style = win.getComputedStyle(el);
+            var isScrollable = (style.overflowY === 'auto' || style.overflowY === 'scroll');
+            var hasScroll = el.scrollHeight > el.clientHeight + 50;
+            var isVisible = el.offsetParent !== null || el === doc.body;
+            return isScrollable && hasScroll && isVisible;
+        });
+
+        // 幅でソート（最も広いものを優先）
+        allScrollables.sort(function (a, b) {
+            return b.clientWidth - a.clientWidth;
+        });
+
+        // 幅が画面の40%以上のものを優先
+        var mainCandidates = allScrollables.filter(function (el) {
+            return el.clientWidth > win.innerWidth * 0.4;
+        });
+
+        if (mainCandidates.length > 0) {
+            return mainCandidates[0];
+        }
+
+        // フォールバック: 一般的なセレクタ
         if (hostname.includes('gemini.google.com')) {
-            mainPane = doc.querySelector('.conversation-container, [class*="conversation"], main[role="main"], .chat-container');
-            if (!mainPane) {
-                var scrollables = Array.from(doc.querySelectorAll('*')).filter(function (el) {
-                    var style = win.getComputedStyle(el);
-                    return (style.overflowY === 'auto' || style.overflowY === 'scroll') &&
-                        el.scrollHeight > el.clientHeight * 1.5 &&
-                        el.clientWidth > win.innerWidth * 0.4;
-                });
-                scrollables.sort(function (a, b) {
-                    return (b.clientHeight * b.clientWidth) - (a.clientHeight * a.clientWidth);
-                });
-                mainPane = scrollables[0] || null;
-            }
+            return doc.querySelector('main[role="main"]') || allScrollables[0] || null;
         }
-        // NotebookLM
-        else if (hostname.includes('notebooklm.google.com')) {
-            mainPane = doc.querySelector('[class*="chat"], [class*="conversation"], main, [role="main"]');
-        }
-        // 一般的なページ
-        else {
-            mainPane = doc.querySelector('main, [role="main"], article, .content, #content, .main');
+        if (hostname.includes('notebooklm.google.com')) {
+            return doc.querySelector('main, [role="main"]') || allScrollables[0] || null;
         }
 
-        return mainPane;
+        return doc.querySelector('main, [role="main"], article') || allScrollables[0] || null;
     }
 
-    // チャットクエリ（ユーザーの発言）を検出
-    function detectChatQueries() {
-        var queries = [];
+    // Geminiのチャット要素を検出
+    function detectGeminiChatItems(mainPane) {
+        var items = [];
         var hostname = win.location.hostname;
 
-        // Gemini用セレクタ
-        if (hostname.includes('gemini.google.com')) {
-            // ユーザーのメッセージを検出
-            var userMessages = doc.querySelectorAll('[data-message-author-role="user"], .user-message, [class*="user-query"], [class*="query-text"]');
-            userMessages.forEach(function (msg) {
-                var text = msg.textContent.trim();
-                if (text && text.length > 2 && text.length < 200) {
-                    queries.push({
-                        element: msg,
-                        text: text.substring(0, 100),
-                        level: 2, // H2相当
-                        isQuery: true,
-                        isNative: false
-                    });
-                }
-            });
+        if (!hostname.includes('gemini.google.com')) return items;
 
-            // フォールバック: 太字かつ短いテキストをクエリ候補として検出
-            if (queries.length === 0) {
-                var candidates = doc.querySelectorAll('p, div');
-                candidates.forEach(function (el) {
-                    var style = win.getComputedStyle(el);
-                    var text = el.textContent.trim();
-                    if (parseInt(style.fontWeight) >= 500 &&
-                        text.length > 5 && text.length < 150 &&
-                        el.children.length <= 3) {
-                        // 親要素にuserやqueryのクラスがあるか確認
-                        var parent = el.closest('[class*="user"], [class*="query"], [class*="human"]');
-                        if (parent) {
-                            queries.push({
-                                element: el,
-                                text: text.substring(0, 100),
-                                level: 2,
-                                isQuery: true,
-                                isNative: false
-                            });
-                        }
-                    }
+        // ユーザーのクエリ（H2タグ）を検出
+        var queryHeadings = doc.querySelectorAll('h2');
+        queryHeadings.forEach(function (h2) {
+            // メインペイン内のH2のみ対象
+            if (mainPane && !mainPane.contains(h2)) return;
+
+            var text = h2.textContent.trim();
+            if (text && text.length > 2) {
+                items.push({
+                    element: h2,
+                    text: text.substring(0, 100),
+                    level: 2,
+                    isQuery: true,
+                    isResponse: false,
+                    isNative: true,
+                    isInMainPane: true
                 });
             }
-        }
+        });
 
-        // NotebookLM用セレクタ
-        if (hostname.includes('notebooklm.google.com')) {
-            var userMsgs = doc.querySelectorAll('[class*="user"], [class*="query"], [class*="human-message"]');
-            userMsgs.forEach(function (msg) {
-                var text = msg.textContent.trim();
-                if (text && text.length > 2 && text.length < 200) {
-                    queries.push({
-                        element: msg,
+        // AIの回答（model-response）の冒頭部分を検出
+        var modelResponses = doc.querySelectorAll('[data-message-author-role="model"], .model-response, [class*="model-response"]');
+        modelResponses.forEach(function (resp) {
+            if (mainPane && !mainPane.contains(resp)) return;
+
+            // 回答内の最初の段落またはテキストブロックを取得
+            var firstPara = resp.querySelector('p, .markdown-content > *:first-child, [class*="response-text"] > *:first-child');
+            if (!firstPara) {
+                // フォールバック: 直接のテキストノードを探す
+                var walker = doc.createTreeWalker(resp, NodeFilter.SHOW_TEXT, null, false);
+                var firstText = walker.nextNode();
+                if (firstText && firstText.textContent.trim().length > 10) {
+                    firstPara = firstText.parentElement;
+                }
+            }
+
+            if (firstPara) {
+                var text = firstPara.textContent.trim();
+                // 最初の一文を抽出（。や.で終わる最初の文）
+                var firstSentence = text.match(/^[^。.!?！？]+[。.!?！？]?/);
+                if (firstSentence) {
+                    text = firstSentence[0];
+                }
+                if (text.length > 100) {
+                    text = text.substring(0, 97) + '...';
+                }
+
+                if (text && text.length > 5) {
+                    items.push({
+                        element: firstPara,
+                        text: text,
+                        level: 3,
+                        isQuery: false,
+                        isResponse: true,
+                        isNative: false,
+                        isInMainPane: true
+                    });
+                }
+            }
+
+            // 回答内のHタグも見出しとして抽出
+            var responseHeadings = resp.querySelectorAll('h1, h2, h3, h4, h5, h6');
+            responseHeadings.forEach(function (h) {
+                var text = h.textContent.trim();
+                var lvl = parseInt(h.tagName.charAt(1));
+                if (text && text.length > 2) {
+                    items.push({
+                        element: h,
                         text: text.substring(0, 100),
-                        level: 2,
-                        isQuery: true,
-                        isNative: false
+                        level: lvl,
+                        isQuery: false,
+                        isResponse: false,
+                        isNative: true,
+                        isInMainPane: true
                     });
                 }
             });
-        }
+        });
 
-        return queries;
+        return items;
     }
 
-    // スクロールコンテナ取得
     function getScrollContainer() {
         var mainPane = detectMainPane();
         if (mainPane && mainPane.scrollHeight > mainPane.clientHeight) {
             return mainPane;
         }
-        if (win.scrollY > 0 || doc.documentElement.scrollHeight > win.innerHeight) {
-            return win;
-        }
-        var candidates = Array.from(doc.querySelectorAll('*'));
-        var scrollable = candidates.filter(function (el) {
-            var style = win.getComputedStyle(el);
-            var isOverflow = style.overflowY === 'auto' || style.overflowY === 'scroll';
-            return isOverflow && el.scrollHeight > el.clientHeight;
-        });
-        scrollable.sort(function (a, b) {
-            return (b.clientHeight * b.clientWidth) - (a.clientHeight * a.clientWidth);
-        });
-        return scrollable.length > 0 ? scrollable[0] : win;
+        return win;
     }
 
-    // スムーズスクロール
     function smartScrollTo(targetEl) {
         var container = getScrollContainer();
         var isWindow = (container === win);
@@ -206,174 +211,150 @@ javascript: (function () {
         }, 1500);
     }
 
-    // 要素がメインペイン内かどうか判定
     function isInMainPane(element, mainPane) {
         if (!mainPane) return false;
         return mainPane.contains(element);
     }
 
-    // HeadingDetector コア
-    var HeadingDetector = {
-        config: {
-            fontSizeRatio: 1.15,
-            boldThreshold: 600,
-            maxTextLength: 150,
-            maxHeadings: 150
-        },
+    // 検出メイン
+    function detectAllHeadings() {
+        var mainPane = detectMainPane();
+        var allHeadings = [];
+        var hostname = win.location.hostname;
+        var addedElements = new Set();
 
-        getBaseFontSize: function () {
-            var body = document.body;
-            if (!body) return 16;
-            return parseFloat(window.getComputedStyle(body).fontSize) || 16;
-        },
-
-        isHeadingCandidate: function (element, baseFontSize) {
-            if (element.offsetParent === null && element.tagName !== 'BODY') return null;
-            var style = window.getComputedStyle(element);
-            var fontSize = parseFloat(style.fontSize);
-            var fontWeight = parseInt(style.fontWeight) || 400;
-            var display = style.display;
-            var text = element.textContent.trim();
-
-            if (!text || text.length > this.config.maxTextLength || text.length < 2) return null;
-            if (element.children.length > 5) return null;
-
-            var isBigger = fontSize >= baseFontSize * this.config.fontSizeRatio;
-            var isBold = fontWeight >= this.config.boldThreshold;
-            var isBlock = ['block', 'flex', 'grid', 'list-item'].includes(display) || display.startsWith('table');
-
-            var score = 0;
-            var level = 6;
-
-            if (isBigger) {
-                score += 30;
-                var ratio = fontSize / baseFontSize;
-                if (ratio >= 2.0) level = 1;
-                else if (ratio >= 1.6) level = 2;
-                else if (ratio >= 1.3) level = 3;
-                else if (ratio >= 1.15) level = 4;
-                else level = 5;
-            }
-
-            if (isBold) {
-                score += 25;
-                if (level > 3) level = Math.max(level - 1, 1);
-            }
-
-            if (isBlock) score += 15;
-
-            var mt = parseFloat(style.marginTop) || 0;
-            var pt = parseFloat(style.paddingTop) || 0;
-            var mb = parseFloat(style.marginBottom) || 0;
-            var pb = parseFloat(style.paddingBottom) || 0;
-            if (mt > 10 || pt > 10) score += 10;
-            if (mb > 5 || pb > 5) score += 5;
-            if (text.length <= 50) score += 10;
-            if (text.length <= 20) score += 5;
-
-            var ci = ((element.className || '') + ' ' + (element.id || '')).toLowerCase();
-            if (/heading|title|header|section-title|headline/i.test(ci)) score += 15;
-
-            if (score < 40) return null;
-            return { element: element, text: text.substring(0, 100), level: level, score: score, isNative: false, isQuery: false };
-        },
-
-        removeDuplicates: function (headings) {
-            var result = [];
-            var elements = headings.map(function (h) { return h.element; });
-            for (var i = 0; i < headings.length; i++) {
-                var heading = headings[i];
-                var isDuplicate = false;
-                for (var j = 0; j < elements.length; j++) {
-                    var other = elements[j];
-                    if (heading.element === other) continue;
-                    if (heading.element.contains(other) || other.contains(heading.element)) {
-                        var otherHeading = headings.find(function (h) { return h.element === other; });
-                        if (other.contains(heading.element) && otherHeading && otherHeading.score >= heading.score) {
-                            isDuplicate = true;
-                            break;
-                        }
-                    }
+        // Gemini専用のチャット検出
+        if (hostname.includes('gemini.google.com')) {
+            var chatItems = detectGeminiChatItems(mainPane);
+            chatItems.forEach(function (item) {
+                if (!addedElements.has(item.element)) {
+                    addedElements.add(item.element);
+                    allHeadings.push(item);
                 }
-                if (!isDuplicate) result.push(heading);
-            }
-            return result;
-        },
+            });
+        }
 
-        detect: function () {
-            var baseFontSize = this.getBaseFontSize();
-            var existingHeadings = document.querySelectorAll('h1, h2, h3, h4, h5, h6, [role="heading"]');
+        // ネイティブ見出し（H1-H6）を検出
+        var nativeHeadings = doc.querySelectorAll('h1, h2, h3, h4, h5, h6, [role="heading"]');
+        nativeHeadings.forEach(function (h) {
+            if (addedElements.has(h)) return; // 既に追加済みならスキップ
+
+            var text = h.textContent.trim();
+            if (!text || text.length < 2) return;
+
+            var lvl = h.tagName.match(/^H([1-6])$/) ? parseInt(h.tagName.charAt(1)) : (parseInt(h.getAttribute('aria-level')) || 3);
+            var inMain = isInMainPane(h, mainPane);
+
+            addedElements.add(h);
+            allHeadings.push({
+                element: h,
+                text: text.substring(0, 100),
+                level: lvl,
+                score: 100,
+                isNative: true,
+                isQuery: false,
+                isResponse: false,
+                isInMainPane: inMain
+            });
+        });
+
+        // スタイル解析による見出し検出（メインペイン外のみ、または一般ページ）
+        if (!hostname.includes('gemini.google.com') || !mainPane) {
+            var baseFontSize = parseFloat(win.getComputedStyle(doc.body).fontSize) || 16;
+            var selectors = 'p, div, span, li, strong, b, em';
+            var elements = doc.querySelectorAll(selectors);
+
             var candidates = [];
-            var selectors = 'p, div, span, li, td, th, a, strong, b, em, article, section, header, footer, main, aside, nav, label';
-            var elements = document.querySelectorAll(selectors);
-            var mainPane = detectMainPane();
+            elements.forEach(function (el) {
+                if (addedElements.has(el)) return;
+                if (el.offsetParent === null && el.tagName !== 'BODY') return;
 
-            for (var i = 0; i < elements.length; i++) {
-                var element = elements[i];
-                var isInsideHeading = false;
-                for (var j = 0; j < existingHeadings.length; j++) {
-                    if (existingHeadings[j].contains(element)) {
-                        isInsideHeading = true;
-                        break;
-                    }
+                // 見出しタグ内の要素はスキップ
+                var insideHeading = false;
+                nativeHeadings.forEach(function (h) {
+                    if (h.contains(el)) insideHeading = true;
+                });
+                if (insideHeading) return;
+
+                var style = win.getComputedStyle(el);
+                var fontSize = parseFloat(style.fontSize);
+                var fontWeight = parseInt(style.fontWeight) || 400;
+                var text = el.textContent.trim();
+
+                if (!text || text.length > 150 || text.length < 3) return;
+                if (el.children.length > 5) return;
+
+                var isBigger = fontSize >= baseFontSize * 1.15;
+                var isBold = fontWeight >= 600;
+
+                if (!isBigger && !isBold) return;
+
+                var score = 0;
+                var level = 6;
+
+                if (isBigger) {
+                    score += 30;
+                    var ratio = fontSize / baseFontSize;
+                    if (ratio >= 2.0) level = 1;
+                    else if (ratio >= 1.6) level = 2;
+                    else if (ratio >= 1.3) level = 3;
+                    else if (ratio >= 1.15) level = 4;
+                    else level = 5;
                 }
-                if (isInsideHeading) continue;
-                var result = this.isHeadingCandidate(element, baseFontSize);
-                if (result) {
-                    result.isInMainPane = isInMainPane(element, mainPane);
-                    candidates.push(result);
+
+                if (isBold) {
+                    score += 25;
+                    if (level > 3) level = Math.max(level - 1, 1);
                 }
-            }
 
-            candidates.sort(function (a, b) { return b.score - a.score; });
-            var topCandidates = candidates.slice(0, this.config.maxHeadings * 2);
-            var filtered = this.removeDuplicates(topCandidates);
+                if (['block', 'flex', 'grid'].includes(style.display)) score += 15;
+                if (text.length <= 50) score += 10;
 
-            var allHeadings = [];
-
-            // ネイティブ見出しを追加
-            for (var k = 0; k < existingHeadings.length; k++) {
-                var h = existingHeadings[k];
-                var text = h.textContent.trim();
-                if (text) {
-                    var lvl = h.tagName.match(/^H([1-6])$/) ? parseInt(h.tagName.charAt(1)) : (parseInt(h.getAttribute('aria-level')) || 3);
-                    allHeadings.push({
-                        element: h,
+                if (score >= 40) {
+                    candidates.push({
+                        element: el,
                         text: text.substring(0, 100),
-                        level: lvl,
-                        score: 100,
-                        isNative: true,
+                        level: level,
+                        score: score,
+                        isNative: false,
                         isQuery: false,
-                        isInMainPane: isInMainPane(h, mainPane)
+                        isResponse: false,
+                        isInMainPane: isInMainPane(el, mainPane)
                     });
                 }
-            }
-
-            // スタイル検出見出しを追加
-            for (var m = 0; m < Math.min(filtered.length, this.config.maxHeadings); m++) {
-                allHeadings.push(filtered[m]);
-            }
-
-            // チャットクエリを追加
-            var queries = detectChatQueries();
-            queries.forEach(function (q) {
-                q.isInMainPane = isInMainPane(q.element, mainPane);
-                allHeadings.push(q);
             });
 
-            // DOMの出現順にソート
-            allHeadings.sort(function (a, b) {
-                var pos = a.element.compareDocumentPosition(b.element);
-                return pos & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1;
-            });
+            // スコア順にソート
+            candidates.sort(function (a, b) { return b.score - a.score; });
 
-            return allHeadings;
+            // 重複削除
+            candidates.forEach(function (c) {
+                var isDup = false;
+                addedElements.forEach(function (added) {
+                    if (added.contains(c.element) || c.element.contains(added)) {
+                        isDup = true;
+                    }
+                });
+                if (!isDup) {
+                    addedElements.add(c.element);
+                    allHeadings.push(c);
+                }
+            });
         }
-    };
+
+        // DOMの出現順にソート
+        allHeadings.sort(function (a, b) {
+            var pos = a.element.compareDocumentPosition(b.element);
+            return pos & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1;
+        });
+
+        return { headings: allHeadings, mainPane: mainPane };
+    }
 
     // 検出実行
-    var headings = HeadingDetector.detect();
-    var mainPane = detectMainPane();
+    var result = detectAllHeadings();
+    var headings = result.headings;
+    var mainPane = result.mainPane;
 
     // ウィジェット作成
     var container = createEl('div', '');
@@ -503,8 +484,9 @@ javascript: (function () {
     // 件数表示
     var mainCount = headings.filter(function (h) { return h.isInMainPane; }).length;
     var queryCount = headings.filter(function (h) { return h.isQuery; }).length;
+    var respCount = headings.filter(function (h) { return h.isResponse; }).length;
     var countRow = createEl('div', 'font-size:11px;color:' + THEME.btnText + ';',
-        '🎯 メイン: ' + mainCount + ' 件  💬 クエリ: ' + queryCount + ' 件  📌 全体: ' + headings.length + ' 件');
+        '🎯 メイン: ' + mainCount + ' 件  💬 Q: ' + queryCount + '  💭 A: ' + respCount + '  📌 全体: ' + headings.length + ' 件');
     header.appendChild(countRow);
 
     container.appendChild(header);
@@ -513,7 +495,6 @@ javascript: (function () {
     var content = createEl('div', 'flex-grow:1;overflow-y:auto;padding:12px;background:' + THEME.bg + ';');
     container.appendChild(content);
 
-    // 検索マッチング（ノードとその親にマッチフラグをセット）
     function markSearchMatches(nodes, query) {
         if (!query) return false;
         var hasMatch = false;
@@ -527,7 +508,6 @@ javascript: (function () {
         return hasMatch;
     }
 
-    // ツリー構築
     function buildTree(elements) {
         var root = { children: [] };
         var stack = [{ level: 0, node: root }];
@@ -540,12 +520,19 @@ javascript: (function () {
         return root.children;
     }
 
-    function getLevelColor(level, isQuery) {
-        if (isQuery) return THEME.query;
-        return THEME['h' + level] || THEME.h6;
+    function getLevelColor(heading) {
+        if (heading.isQuery) return THEME.query;
+        if (heading.isResponse) return THEME.response;
+        return THEME['h' + heading.level] || THEME.h6;
     }
 
-    function createTreeDom(nodes, depth, inMainPane) {
+    function getBadgeText(heading) {
+        if (heading.isQuery) return '💬Q';
+        if (heading.isResponse) return '💭A';
+        return (heading.isNative ? '' : '✨') + 'H' + heading.level;
+    }
+
+    function createTreeDom(nodes, depth) {
         if (nodes.length === 0) return null;
         var ul = document.createElement('ul');
         ul.style.cssText = 'list-style:none;padding-left:' + (depth === 0 ? '0' : '18px') + ';margin:0;';
@@ -560,9 +547,9 @@ javascript: (function () {
             var hasChildren = node.children.length > 0;
             var isMain = node.heading.isInMainPane;
 
-            // メインペイン内はH3まで展開、それ以外はH2まで
-            var collapseLevel = isMain ? 4 : 2;
-            var isCollapsed = (node.level >= collapseLevel) || (!isMain && node.level >= 2);
+            // メインペイン: H3まで展開、それ以外: 折りたたみ
+            var collapseLevel = isMain ? 4 : 1;
+            var isCollapsed = !isMain || (node.level >= collapseLevel);
 
             // 検索でマッチした場合は展開
             if (config.searchQuery && (node.searchMatch || node.hasMatchInChildren)) {
@@ -574,11 +561,9 @@ javascript: (function () {
             toggle.style.cssText = 'cursor:' + (hasChildren ? 'pointer' : 'default') + ';color:' + (hasChildren ? THEME.btnText : '#555') + ';font-size:10px;margin-top:3px;width:12px;flex-shrink:0;user-select:none;';
 
             var levelBadge = document.createElement('span');
-            var badgeText = node.heading.isQuery ? '💬' : ((node.heading.isNative ? '' : '✨') + 'H' + node.level);
-            levelBadge.textContent = badgeText;
-            levelBadge.style.cssText = 'flex-shrink:0;font-size:9px;padding:2px 5px;border-radius:3px;background:' + getLevelColor(node.level, node.heading.isQuery) + ';color:#fff;font-weight:bold;';
+            levelBadge.textContent = getBadgeText(node.heading);
+            levelBadge.style.cssText = 'flex-shrink:0;font-size:9px;padding:2px 5px;border-radius:3px;background:' + getLevelColor(node.heading) + ';color:#fff;font-weight:bold;';
 
-            // メインペインのバッジを区別
             if (isMain) {
                 levelBadge.style.boxShadow = '0 0 0 2px rgba(100, 255, 100, 0.5)';
             }
@@ -597,13 +582,11 @@ javascript: (function () {
             // 検索ハイライト
             if (config.searchQuery) {
                 if (node.searchMatch) {
-                    // 直接マッチ
                     row.style.background = THEME.searchHighlight;
                     row.style.borderRadius = '4px';
                     row.style.padding = '2px 4px';
                     row.style.margin = '-2px -4px';
                 } else if (node.hasMatchInChildren && isCollapsed) {
-                    // 子にマッチがあり、折りたたまれている場合
                     row.style.background = 'rgba(255, 107, 107, 0.3)';
                     row.style.borderRadius = '4px';
                     row.style.padding = '2px 4px';
@@ -620,34 +603,32 @@ javascript: (function () {
 
             var childContainer = null;
             if (hasChildren) {
-                childContainer = createTreeDom(node.children, depth + 1, isMain);
+                childContainer = createTreeDom(node.children, depth + 1);
                 childContainer.style.display = isCollapsed ? 'none' : 'block';
                 childContainer.style.marginTop = '6px';
 
-                var updateHighlightOnToggle = function () {
-                    // 展開時にハイライトを更新
-                    if (childContainer.style.display === 'block') {
-                        if (node.hasMatchInChildren && !node.searchMatch) {
-                            row.style.background = '';
-                            row.style.padding = '';
-                            row.style.margin = '';
-                        }
-                    } else {
-                        if (node.hasMatchInChildren && !node.searchMatch && config.searchQuery) {
-                            row.style.background = 'rgba(255, 107, 107, 0.3)';
-                            row.style.borderRadius = '4px';
-                            row.style.padding = '2px 4px';
-                            row.style.margin = '-2px -4px';
-                        }
-                    }
-                };
-
+                var rowRef = row;
+                var nodeRef = node;
                 toggle.onclick = function (e) {
                     e.stopPropagation();
                     var hidden = childContainer.style.display === 'none';
                     childContainer.style.display = hidden ? 'block' : 'none';
                     toggle.textContent = hidden ? '▼' : '▶';
-                    updateHighlightOnToggle();
+                    // ハイライト更新
+                    if (childContainer.style.display === 'block') {
+                        if (nodeRef.hasMatchInChildren && !nodeRef.searchMatch) {
+                            rowRef.style.background = '';
+                            rowRef.style.padding = '';
+                            rowRef.style.margin = '';
+                        }
+                    } else {
+                        if (nodeRef.hasMatchInChildren && !nodeRef.searchMatch && config.searchQuery) {
+                            rowRef.style.background = 'rgba(255, 107, 107, 0.3)';
+                            rowRef.style.borderRadius = '4px';
+                            rowRef.style.padding = '2px 4px';
+                            rowRef.style.margin = '-2px -4px';
+                        }
+                    }
                 };
             }
 
@@ -669,12 +650,11 @@ javascript: (function () {
         }
         var tree = buildTree(headings);
 
-        // 検索マッチをマーク
         if (config.searchQuery) {
             markSearchMatches(tree, config.searchQuery);
         }
 
-        var dom = createTreeDom(tree, 0, false);
+        var dom = createTreeDom(tree, 0);
         if (dom) content.appendChild(dom);
     }
 
