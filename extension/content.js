@@ -140,17 +140,22 @@
                 }
 
                 // 回答内のHタグも見出しとして抽出
+                // レベルを 2.5 + (元レベル/10) にして、必ず回答の子要素になるようにする
                 const responseHeadings = resp.querySelectorAll('h1, h2, h3, h4, h5, h6');
                 responseHeadings.forEach((h) => {
                     const text = h.textContent.trim();
-                    const lvl = parseInt(h.tagName.charAt(1));
+                    const originalLvl = parseInt(h.tagName.charAt(1));
+                    // H1→2.51, H2→2.52, H3→2.53... として回答(2.5)の子に配置
+                    const effectiveLevel = 2.5 + (originalLvl / 10);
                     if (text && text.length > 2) {
                         items.push({
                             element: h,
                             text: text.substring(0, 100),
-                            level: lvl,
+                            level: effectiveLevel,
+                            originalLevel: originalLvl,  // 表示用に元のレベルを保持
                             isQuery: false,
                             isResponse: false,
+                            isInsideResponse: true,  // 回答内フラグ
                             isNative: true,
                             isInMainPane: true
                         });

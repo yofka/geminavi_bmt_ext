@@ -31,7 +31,7 @@ javascript: (function () {
     };
 
     var config = {
-        level: 4,
+        level: 2.5,  // デフォルトは回答レベルまで展開（回答内の見出しは折りたたみ）
         x: 20,
         y: 60,
         width: 380,
@@ -156,17 +156,22 @@ javascript: (function () {
             }
 
             // 回答内のHタグも見出しとして抽出
+            // レベルを 2.5 + (元レベル/10) にして、必ず回答の子要素になるようにする
             var responseHeadings = resp.querySelectorAll('h1, h2, h3, h4, h5, h6');
             responseHeadings.forEach(function (h) {
                 var text = h.textContent.trim();
-                var lvl = parseInt(h.tagName.charAt(1));
+                var originalLvl = parseInt(h.tagName.charAt(1));
+                // H1→2.51, H2→2.52, H3→2.53... として回答(2.5)の子に配置
+                var effectiveLevel = 2.5 + (originalLvl / 10);
                 if (text && text.length > 2) {
                     items.push({
                         element: h,
                         text: text.substring(0, 100),
-                        level: lvl,
+                        level: effectiveLevel,
+                        originalLevel: originalLvl,  // 表示用に元のレベルを保持
                         isQuery: false,
                         isResponse: false,
+                        isInsideResponse: true,  // 回答内フラグ
                         isNative: true,
                         isInMainPane: true
                     });
@@ -453,30 +458,31 @@ javascript: (function () {
     filterRow.appendChild(lbl);
 
     var levelBtns = [];
+    // Expandレベルの選択肢: 1, 2, 2.5(回答まで), 3, 4, 5, 6
+    var levelOptions = [1, 2, 2.5, 3, 4, 5, 6];
     function renderDepthBtns() {
         levelBtns.forEach(function (b) { b.remove(); });
         levelBtns = [];
-        for (var i = 1; i <= 6; i++) {
-            (function (lvl) {
-                var btn = document.createElement('button');
-                btn.textContent = lvl;
-                var baseStyle = 'border:1px solid ' + THEME.border + ';cursor:pointer;border-radius:4px;width:26px;height:26px;font-size:11px;padding:0;text-align:center;color:' + THEME.text + ';';
-                if (lvl === config.level) {
-                    btn.style.cssText = baseStyle + 'background:' + THEME.activeBtnBg + ';color:' + THEME.activeBtnText + ';font-weight:bold;border-color:' + THEME.activeBtnBg + ';';
-                } else {
-                    btn.style.cssText = baseStyle + 'background:transparent;';
-                    btn.onmouseover = function () { this.style.background = THEME.btnHover; };
-                    btn.onmouseout = function () { this.style.background = 'transparent'; };
-                }
-                btn.onclick = function () {
-                    config.level = lvl;
-                    renderDepthBtns();
-                    renderTree();
-                };
-                filterRow.appendChild(btn);
-                levelBtns.push(btn);
-            })(i);
-        }
+        levelOptions.forEach(function (lvl) {
+            var btn = document.createElement('button');
+            btn.textContent = lvl === 2.5 ? 'A' : lvl;  // 2.5は「A」と表示
+            btn.title = lvl === 2.5 ? '回答まで展開' : 'H' + lvl + 'まで展開';
+            var baseStyle = 'border:1px solid ' + THEME.border + ';cursor:pointer;border-radius:4px;width:26px;height:26px;font-size:11px;padding:0;text-align:center;color:' + THEME.text + ';';
+            if (lvl === config.level) {
+                btn.style.cssText = baseStyle + 'background:' + THEME.activeBtnBg + ';color:' + THEME.activeBtnText + ';font-weight:bold;border-color:' + THEME.activeBtnBg + ';';
+            } else {
+                btn.style.cssText = baseStyle + 'background:transparent;';
+                btn.onmouseover = function () { this.style.background = THEME.btnHover; };
+                btn.onmouseout = function () { this.style.background = 'transparent'; };
+            }
+            btn.onclick = function () {
+                config.level = lvl;
+                renderDepthBtns();
+                renderTree();
+            };
+            filterRow.appendChild(btn);
+            levelBtns.push(btn);
+        });
     }
     renderDepthBtns();
     header.appendChild(filterRow);
@@ -523,13 +529,17 @@ javascript: (function () {
     function getLevelColor(heading) {
         if (heading.isQuery) return THEME.query;
         if (heading.isResponse) return THEME.response;
-        return THEME['h' + heading.level] || THEME.h6;
+        // 回答内の見出しは元のレベルで色を決定
+        var displayLevel = heading.originalLevel || Math.floor(heading.level);
+        return THEME['h' + displayLevel] || THEME.h6;
     }
 
     function getBadgeText(heading) {
         if (heading.isQuery) return '💬Q';
         if (heading.isResponse) return '💭A';
-        return (heading.isNative ? '' : '✨') + 'H' + heading.level;
+        // 回答内の見出しは元のレベルを表示
+        var displayLevel = heading.originalLevel || Math.floor(heading.level);
+        return (heading.isNative ? '' : '✨') + 'H' + displayLevel;
     }
 
     function createTreeDom(nodes, depth) {
