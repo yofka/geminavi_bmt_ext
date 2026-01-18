@@ -84,6 +84,10 @@
             const queryHeadings = document.querySelectorAll('h2');
             queryHeadings.forEach((h2) => {
                 if (this.mainPane && !this.mainPane.contains(h2)) return;
+                // 回答コンテナ内のH2は除外（回答内見出しとして別途処理）
+                if (h2.closest('[data-message-author-role="model"]') ||
+                    h2.closest('.model-response') ||
+                    h2.closest('[class*="model-response"]')) return;
 
                 const text = h2.textContent.trim();
                 if (text && text.length > 2) {
@@ -409,10 +413,12 @@
                 index: index,
                 text: h.text,
                 level: h.level,
+                originalLevel: h.originalLevel,
                 score: h.score,
                 isNative: h.isNative,
                 isQuery: h.isQuery,
                 isResponse: h.isResponse,
+                isInsideResponse: h.isInsideResponse,
                 isInMainPane: h.isInMainPane
             }));
 

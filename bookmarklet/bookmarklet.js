@@ -100,6 +100,10 @@ javascript: (function () {
         queryHeadings.forEach(function (h2) {
             // メインペイン内のH2のみ対象
             if (mainPane && !mainPane.contains(h2)) return;
+            // 回答コンテナ内のH2は除外（回答内見出しとして別途処理）
+            if (h2.closest('[data-message-author-role="model"]') ||
+                h2.closest('.model-response') ||
+                h2.closest('[class*="model-response"]')) return;
 
             var text = h2.textContent.trim();
             if (text && text.length > 2) {
@@ -542,7 +546,17 @@ javascript: (function () {
         return (heading.isNative ? '' : '✨') + 'H' + displayLevel;
     }
 
-    function createTreeDom(nodes, depth) {
+    // ノードがGemini会話内かどうか判定
+    function isInGeminiConversation(node) {
+        // 「Gemini との会話」見出しを会話ルートとして認識
+        var isConversationRoot = node.heading.text.includes('Gemini との会話') ||
+            node.heading.text.includes('Conversations with Gemini');
+        return isConversationRoot ||
+            (node.heading.isInMainPane &&
+                (node.heading.isQuery || node.heading.isResponse || node.heading.isInsideResponse));
+    }
+
+    function createTreeDom(nodes, depth, parentInGemini) {
         if (nodes.length === 0) return null;
         var ul = document.createElement('ul');
         ul.style.cssText = 'list-style:none;padding-left:' + (depth === 0 ? '0' : '18px') + ';margin:0;';
@@ -556,10 +570,17 @@ javascript: (function () {
 
             var hasChildren = node.children.length > 0;
             var isMain = node.heading.isInMainPane;
+            var inGemini = parentInGemini || isInGeminiConversation(node);
 
-            // メインペイン: H3まで展開、それ以外: 折りたたみ
-            var collapseLevel = isMain ? 4 : 1;
-            var isCollapsed = !isMain || (node.level >= collapseLevel);
+            // 展開判定: Gemini会話内のみ展開レベルを適用
+            var isCollapsed;
+            if (inGemini) {
+                // Gemini会話内: 展開レベルに応じて折りたたみ
+                isCollapsed = node.level > config.level;
+            } else {
+                // Gemini会話外: 常に折りたたみ
+                isCollapsed = true;
+            }
 
             // 検索でマッチした場合は展開
             if (config.searchQuery && (node.searchMatch || node.hasMatchInChildren)) {
@@ -613,7 +634,7 @@ javascript: (function () {
 
             var childContainer = null;
             if (hasChildren) {
-                childContainer = createTreeDom(node.children, depth + 1);
+                childContainer = createTreeDom(node.children, depth + 1, inGemini);
                 childContainer.style.display = isCollapsed ? 'none' : 'block';
                 childContainer.style.marginTop = '6px';
 
@@ -664,7 +685,7 @@ javascript: (function () {
             markSearchMatches(tree, config.searchQuery);
         }
 
-        var dom = createTreeDom(tree, 0);
+        var dom = createTreeDom(tree, 0, false);
         if (dom) content.appendChild(dom);
     }
 

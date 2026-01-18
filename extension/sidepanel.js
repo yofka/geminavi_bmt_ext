@@ -1,5 +1,5 @@
 /**
- * Heading Detector - Popup Script
+ * Heading Detector - Side Panel Script
  * Version 2.1 - Simplified UI
  */
 
