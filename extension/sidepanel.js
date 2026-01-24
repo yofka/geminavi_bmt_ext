@@ -3,6 +3,9 @@
  * Version 2.1 - Simplified UI
  */
 
+// API名前空間の抽象化（Firefox/Chrome両対応）
+const api = typeof browser !== 'undefined' ? browser : chrome;
+
 document.addEventListener('DOMContentLoaded', async () => {
     const searchInput = document.getElementById('searchInput');
     const searchClear = document.getElementById('searchClear');
@@ -35,7 +38,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 設定を読み込む
     async function loadConfig() {
         try {
-            const config = await chrome.runtime.sendMessage({ action: 'getConfig' });
+            const config = await api.runtime.sendMessage({ action: 'getConfig' });
             if (config) {
                 expandLevel = config.expandLevel !== undefined ? config.expandLevel : 2.5;
                 currentMode = config.displayMode || 'sidepanel';
@@ -61,7 +64,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 expandLevel = lvl;
                 updateExpandBtns();
                 renderHeadings(currentHeadings);
-                await chrome.runtime.sendMessage({ action: 'saveExpandLevel', level: lvl });
+                await api.runtime.sendMessage({ action: 'saveExpandLevel', level: lvl });
             });
             expandBtns.appendChild(btn);
         });
@@ -84,7 +87,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         wrapEnabled = !wrapEnabled;
         updateWrapBtn();
         renderHeadings(currentHeadings);
-        await chrome.runtime.sendMessage({ action: 'saveWrap', wrap: wrapEnabled });
+        await api.runtime.sendMessage({ action: 'saveWrap', wrap: wrapEnabled });
     });
 
     // モード切替ボタン
@@ -94,7 +97,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     modeToggle.addEventListener('click', async () => {
         const newMode = currentMode === 'sidepanel' ? 'popup' : 'sidepanel';
-        await chrome.runtime.sendMessage({ action: 'setDisplayMode', mode: newMode });
+        await api.runtime.sendMessage({ action: 'setDisplayMode', mode: newMode });
         currentMode = newMode;
         updateModeToggle();
     });
@@ -118,16 +121,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 自動検出を実行
     async function autoDetect() {
         try {
-            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+            const [tab] = await api.tabs.query({ active: true, currentWindow: true });
 
             // コンテンツスクリプトを注入
-            await chrome.scripting.executeScript({
+            await api.scripting.executeScript({
                 target: { tabId: tab.id },
                 files: ['content.js']
             });
 
             // 検出を実行
-            const response = await chrome.tabs.sendMessage(tab.id, { action: 'detect' });
+            const response = await api.tabs.sendMessage(tab.id, { action: 'detect' });
 
             if (response && response.success) {
                 currentHeadings = response.headings;
@@ -274,8 +277,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             link.addEventListener('click', async (e) => {
                 e.preventDefault();
                 try {
-                    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-                    await chrome.tabs.sendMessage(tab.id, { action: 'scrollTo', index: node.heading.index });
+                    const [tab] = await api.tabs.query({ active: true, currentWindow: true });
+                    await api.tabs.sendMessage(tab.id, { action: 'scrollTo', index: node.heading.index });
                 } catch (error) {
                     console.error('Scroll error:', error);
                 }
