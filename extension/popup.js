@@ -56,7 +56,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const btn = document.createElement('button');
             btn.className = 'btn-expand' + (lvl === expandLevel ? ' active' : '');
             btn.textContent = lvl === 2.5 ? 'A' : lvl;
-            btn.title = lvl === 2.5 ? '回答まで展開' : 'H' + lvl + 'まで展開';
+            btn.title = lvl === 2.5 ? '回答まで表示' : 'H' + lvl + 'まで表示';
             btn.addEventListener('click', async () => {
                 expandLevel = lvl;
                 updateExpandBtns();
@@ -227,7 +227,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             // 展開判定: Gemini会話内のみ展開レベルを適用
             let isCollapsed;
             if (inGemini) {
-                isCollapsed = node.level > expandLevel;
+                if (node.heading.isInsideResponse && node.heading.originalLevel) {
+                    // 回答内の見出し: originalLevelを使用
+                    isCollapsed = node.heading.originalLevel >= expandLevel;
+                } else {
+                    // 回答外の見出し: node.levelを使用
+                    isCollapsed = node.level >= expandLevel;
+                }
             } else {
                 isCollapsed = true;
             }

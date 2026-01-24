@@ -470,7 +470,7 @@ javascript: (function () {
         levelOptions.forEach(function (lvl) {
             var btn = document.createElement('button');
             btn.textContent = lvl === 2.5 ? 'A' : lvl;  // 2.5は「A」と表示
-            btn.title = lvl === 2.5 ? '回答まで展開' : 'H' + lvl + 'まで展開';
+            btn.title = lvl === 2.5 ? '回答まで表示' : 'H' + lvl + 'まで表示';
             var baseStyle = 'border:1px solid ' + THEME.border + ';cursor:pointer;border-radius:4px;width:26px;height:26px;font-size:11px;padding:0;text-align:center;color:' + THEME.text + ';';
             if (lvl === config.level) {
                 btn.style.cssText = baseStyle + 'background:' + THEME.activeBtnBg + ';color:' + THEME.activeBtnText + ';font-weight:bold;border-color:' + THEME.activeBtnBg + ';';
@@ -575,8 +575,13 @@ javascript: (function () {
             // 展開判定: Gemini会話内のみ展開レベルを適用
             var isCollapsed;
             if (inGemini) {
-                // Gemini会話内: 展開レベルに応じて折りたたみ
-                isCollapsed = node.level > config.level;
+                if (node.heading.isInsideResponse && node.heading.originalLevel) {
+                    // 回答内の見出し: originalLevelを使用
+                    isCollapsed = node.heading.originalLevel >= config.level;
+                } else {
+                    // 回答外の見出し: node.levelを使用
+                    isCollapsed = node.level >= config.level;
+                }
             } else {
                 // Gemini会話外: 常に折りたたみ
                 isCollapsed = true;
