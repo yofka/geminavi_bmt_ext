@@ -6,12 +6,10 @@
   "permissions": [
     "activeTab",
     "scripting",
+    "sidePanel",
     "storage"
   ],
   "background": {
-    "scripts": [
-      "background.js"
-    ],
     "service_worker": "background.js"
   },
   "action": {
@@ -22,18 +20,8 @@
       "128": "icons/icon128.png"
     }
   },
-  "browser_specific_settings": {
-    "gecko": {
-      "id": "heading-detector@navilet.antig"
-    }
-  },
   "side_panel": {
     "default_path": "sidepanel.html"
-  },
-  "sidebar_action": {
-    "default_panel": "sidepanel.html",
-    "default_icon": "icons/icon48.png",
-    "default_title": "Heading Detector"
   },
   "icons": {
     "16": "icons/icon16.png",

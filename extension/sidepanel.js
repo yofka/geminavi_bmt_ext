@@ -123,20 +123,42 @@ document.addEventListener('DOMContentLoaded', async () => {
         try {
             const [tab] = await api.tabs.query({ active: true, currentWindow: true });
 
-            // コンテンツスクリプトを注入
-            await api.scripting.executeScript({
-                target: { tabId: tab.id },
-                files: ['content.js']
-            });
+            // Chrome の場合のみ scripting.executeScript を使用
+            // Firefox は content_scripts で自動注入されるため不要
+            if (api.scripting && api.scripting.executeScript) {
+                try {
+                    await api.scripting.executeScript({
+                        target: { tabId: tab.id },
+                        files: ['content.js']
+                    });
+                } catch (e) {
+                    // Firefox では scripting API が無い場合があるので無視
+                    console.log('Scripting API not available, using manifest content_scripts');
+                }
+            }
 
-            // 検出を実行
-            const response = await api.tabs.sendMessage(tab.id, { action: 'detect' });
+            // 検出を実行（リトライ付き）
+            let response = null;
+            let lastError = null;
+            for (let attempt = 0; attempt < 3; attempt++) {
+                try {
+                    response = await api.tabs.sendMessage(tab.id, { action: 'detect' });
+                    if (response && response.success) {
+                        break;
+                    }
+                } catch (e) {
+                    lastError = e;
+                    // コンテンツスクリプトがまだ準備できていない可能性がある
+                    console.log(`Attempt ${attempt + 1} failed, retrying...`);
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                }
+            }
 
             if (response && response.success) {
                 currentHeadings = response.headings;
                 renderHeadings(currentHeadings);
             } else {
-                throw new Error('検出に失敗しました');
+                throw lastError || new Error('検出に失敗しました');
             }
         } catch (error) {
             console.error('Detection error:', error);
