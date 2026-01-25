@@ -10,10 +10,13 @@ const DEFAULT_CONFIG = {
     wrap: false
 };
 
+// API名前空間の抽象化（Firefox/Chrome両対応）
+const api = typeof browser !== 'undefined' ? browser : chrome;
+
 // 設定を読み込む
 async function getConfig() {
     try {
-        const result = await chrome.storage.local.get(['displayMode', 'expandLevel', 'wrap']);
+        const result = await api.storage.local.get(['displayMode', 'expandLevel', 'wrap']);
         return {
             displayMode: result.displayMode || DEFAULT_CONFIG.displayMode,
             expandLevel: result.expandLevel !== undefined ? result.expandLevel : DEFAULT_CONFIG.expandLevel,
@@ -28,7 +31,7 @@ async function getConfig() {
 // 設定を保存する
 async function saveConfig(config) {
     try {
-        await chrome.storage.local.set(config);
+        await api.storage.local.set(config);
     } catch (error) {
         console.error('Failed to save config:', error);
     }
@@ -36,33 +39,36 @@ async function saveConfig(config) {
 
 // サイドパネルの状態を更新
 async function updateSidePanelBehavior(displayMode) {
-    try {
-        if (displayMode === 'sidepanel') {
-            // サイドパネルモード: アイコンクリックでサイドパネルを開く
-            await chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
-        } else {
-            // ポップアップモード: アイコンクリックでポップアップを開く（デフォルト動作）
-            await chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false });
+    // Firefoxでは chrome.sidePanel が存在しないためチェック
+    if (typeof chrome !== 'undefined' && chrome.sidePanel && chrome.sidePanel.setPanelBehavior) {
+        try {
+            if (displayMode === 'sidepanel') {
+                // サイドパネルモード: アイコンクリックでサイドパネルを開く
+                await chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
+            } else {
+                // ポップアップモード: アイコンクリックでポップアップを開く（デフォルト動作）
+                await chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false });
+            }
+        } catch (error) {
+            console.error('Failed to set side panel behavior:', error);
         }
-    } catch (error) {
-        console.error('Failed to set side panel behavior:', error);
     }
 }
 
 // 初期化
-chrome.runtime.onInstalled.addListener(async () => {
+api.runtime.onInstalled.addListener(async () => {
     const config = await getConfig();
     await updateSidePanelBehavior(config.displayMode);
 });
 
 // 起動時にも設定を適用
-chrome.runtime.onStartup.addListener(async () => {
+api.runtime.onStartup.addListener(async () => {
     const config = await getConfig();
     await updateSidePanelBehavior(config.displayMode);
 });
 
 // メッセージリスナー（ポップアップ/サイドパネルからの設定変更を受信）
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+api.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'setDisplayMode') {
         (async () => {
             await saveConfig({ displayMode: request.mode });

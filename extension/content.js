@@ -9,6 +9,9 @@
 (function () {
     'use strict';
 
+    // API名前空間の抽象化（Firefox/Chrome両対応）
+    const api = typeof browser !== 'undefined' ? browser : chrome;
+
     const HeadingDetector = {
         config: {
             fontSizeRatio: 1.15,
@@ -403,7 +406,7 @@
     window.HeadingDetector = HeadingDetector;
 
     // メッセージリスナー（ポップアップからの指示を受信）
-    chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    api.runtime.onMessage.addListener((request, sender, sendResponse) => {
         if (request.action === 'detect') {
             const headings = HeadingDetector.detect();
             HeadingDetector.highlight(headings);
