@@ -101,4 +101,37 @@ api.runtime.onMessage.addListener((request, sender, sendResponse) => {
         })();
         return true;
     }
+
+    // インページパネルのトグル
+    if (request.action === 'togglePanel') {
+        (async () => {
+            try {
+                const [tab] = await api.tabs.query({ active: true, currentWindow: true });
+
+                // Chrome/Edge の場合はスクリプトを注入
+                if (api.scripting && api.scripting.executeScript) {
+                    try {
+                        await api.scripting.executeScript({
+                            target: { tabId: tab.id },
+                            files: ['content.js']
+                        });
+                        await api.scripting.executeScript({
+                            target: { tabId: tab.id },
+                            files: ['panel.js']
+                        });
+                    } catch (e) {
+                        console.log('Script injection error (may already be injected):', e.message);
+                    }
+                }
+
+                // パネルトグルメッセージを送信
+                const response = await api.tabs.sendMessage(tab.id, { action: 'togglePanel' });
+                sendResponse(response);
+            } catch (error) {
+                console.error('Toggle panel error:', error);
+                sendResponse({ success: false, error: error.message });
+            }
+        })();
+        return true;
+    }
 });

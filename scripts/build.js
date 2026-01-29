@@ -16,6 +16,7 @@ const DIST_DIR = path.join(ROOT_DIR, 'dist');
 const SHARED_FILES = [
     'background.js',
     'content.js',
+    'panel.js',
     'popup.html',
     'popup.js',
     'popup.css',
@@ -66,7 +67,7 @@ const FIREFOX_MANIFEST = {
     },
     content_scripts: [{
         matches: ["<all_urls>"],
-        js: ["content.js"],
+        js: ["content.js", "panel.js"],
         run_at: "document_idle"
     }],
     browser_specific_settings: {

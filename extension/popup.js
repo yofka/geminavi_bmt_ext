@@ -11,6 +11,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const searchClear = document.getElementById('searchClear');
     const expandBtns = document.getElementById('expandBtns');
     const wrapBtn = document.getElementById('wrapBtn');
+    const panelToggle = document.getElementById('panelToggle');
     const modeToggle = document.getElementById('modeToggle');
     const resultCount = document.getElementById('resultCount');
     const statsCompact = document.getElementById('statsCompact');
@@ -102,6 +103,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         updateModeToggle();
     });
 
+    // インページパネルトグルボタン
+    panelToggle.addEventListener('click', async () => {
+        try {
+            await api.runtime.sendMessage({ action: 'togglePanel' });
+            window.close(); // ポップアップを閉じる
+        } catch (error) {
+            showToast('パネル表示エラー: ' + error.message, 'error');
+        }
+    });
+
     // 検索機能
     searchInput.addEventListener('input', () => {
         searchQuery = searchInput.value.trim().toLowerCase();
@@ -123,25 +134,26 @@ document.addEventListener('DOMContentLoaded', async () => {
         try {
             const [tab] = await api.tabs.query({ active: true, currentWindow: true });
 
-            // Chrome の場合のみ scripting.executeScript を使用
-            // Firefox は content_scripts で自動注入されるため不要
-            if (api.scripting && api.scripting.executeScript) {
-                try {
-                    await api.scripting.executeScript({
-                        target: { tabId: tab.id },
-                        files: ['content.js']
-                    });
-                } catch (e) {
-                    // Firefox では scripting API が無い場合があるので無視
-                    console.log('Scripting API not available, using manifest content_scripts');
-                }
-            }
-
             // 検出を実行（リトライ付き）
             let response = null;
             let lastError = null;
-            for (let attempt = 0; attempt < 3; attempt++) {
+            for (let attempt = 0; attempt < 5; attempt++) {
                 try {
+                    // Chrome/Edge の場合は毎回 scripting.executeScript を試みる
+                    // Firefox は content_scripts で自動注入されるため不要
+                    if (api.scripting && api.scripting.executeScript) {
+                        try {
+                            await api.scripting.executeScript({
+                                target: { tabId: tab.id },
+                                files: ['content.js']
+                            });
+                            // スクリプト注入後、少し待機
+                            await new Promise(resolve => setTimeout(resolve, 100));
+                        } catch (e) {
+                            console.log('Script injection error (may already be injected):', e.message);
+                        }
+                    }
+
                     response = await api.tabs.sendMessage(tab.id, { action: 'detect' });
                     if (response && response.success) {
                         break;
