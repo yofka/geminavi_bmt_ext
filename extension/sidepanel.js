@@ -23,6 +23,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     let wrapEnabled = false;
     let currentMode = 'sidepanel';
 
+    // 自動更新機能
+    let autoRefreshEnabled = true;
+    let autoRefreshDelay = 1500; // ミリ秒
+    let autoRefreshInterval = null;
+    let pendingUpdate = false;
+
+    // 自動更新UI要素
+    const manualRefresh = document.getElementById('manualRefresh');
+    const autoToggle = document.getElementById('autoToggle');
+    const delayDown = document.getElementById('delayDown');
+    const delayUp = document.getElementById('delayUp');
+    const delayValue = document.getElementById('delayValue');
+    const autoStatus = document.getElementById('autoStatus');
+
     // 展開レベルオプション
     const levelOptions = [1, 2, 2.5, 3, 4, 5, 6];
 
@@ -116,6 +130,92 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (currentHeadings.length > 0) {
             renderHeadings(currentHeadings);
         }
+    });
+
+    // 自動更新コントロール
+    function updateStatus(text, statusClass = '') {
+        if (autoStatus) {
+            autoStatus.textContent = text;
+            autoStatus.className = 'auto-status';
+            if (statusClass) {
+                autoStatus.classList.add(statusClass);
+            }
+        }
+    }
+
+    function updateDelayDisplay() {
+        if (delayValue) {
+            delayValue.textContent = (autoRefreshDelay / 1000).toFixed(1) + 's';
+        }
+    }
+
+    function startAutoRefresh() {
+        stopAutoRefresh();
+        if (!autoRefreshEnabled) return;
+
+        autoRefreshInterval = setInterval(async () => {
+            if (pendingUpdate) return;
+
+            try {
+                const [tab] = await api.tabs.query({ active: true, currentWindow: true });
+
+                // コンテンツスクリプトに変更があるか確認
+                const response = await api.tabs.sendMessage(tab.id, { action: 'checkForChanges' });
+
+                if (response && response.hasChanges) {
+                    pendingUpdate = true;
+                    updateStatus('変更検出中...', 'pending');
+
+                    // デバウンス後に再検出
+                    setTimeout(async () => {
+                        await autoDetect();
+                        updateStatus('自動更新: ' + new Date().toLocaleTimeString(), 'updated');
+                        pendingUpdate = false;
+                    }, autoRefreshDelay);
+                }
+            } catch (e) {
+                // エラーは無視（タブが閉じられた等）
+            }
+        }, 1000); // 1秒毎にチェック
+
+        updateStatus('自動更新: ON', '');
+    }
+
+    function stopAutoRefresh() {
+        if (autoRefreshInterval) {
+            clearInterval(autoRefreshInterval);
+            autoRefreshInterval = null;
+        }
+        pendingUpdate = false;
+    }
+
+    // 手動更新ボタン
+    manualRefresh.addEventListener('click', async () => {
+        await autoDetect();
+        updateStatus('手動更新: ' + new Date().toLocaleTimeString(), 'updated');
+    });
+
+    // 自動更新トグル
+    autoToggle.addEventListener('click', () => {
+        autoRefreshEnabled = !autoRefreshEnabled;
+        autoToggle.classList.toggle('active', autoRefreshEnabled);
+        if (autoRefreshEnabled) {
+            startAutoRefresh();
+        } else {
+            stopAutoRefresh();
+            updateStatus('自動更新: OFF', '');
+        }
+    });
+
+    // 遅延時間調整
+    delayDown.addEventListener('click', () => {
+        autoRefreshDelay = Math.max(500, autoRefreshDelay - 500);
+        updateDelayDisplay();
+    });
+
+    delayUp.addEventListener('click', () => {
+        autoRefreshDelay = Math.min(5000, autoRefreshDelay + 500);
+        updateDelayDisplay();
     });
 
     // 自動検出を実行
@@ -272,7 +372,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             // トグルボタン
             const toggle = document.createElement('span');
             toggle.className = 'toggle';
-            toggle.textContent = hasChildren ? (isCollapsed ? '▶' : '▼') : '•';
+            toggle.textContent = hasChildren ? (isCollapsed ? '▶' : '▼') : '';
             if (!hasChildren) toggle.classList.add('no-children');
 
             // レベルバッジ
@@ -366,6 +466,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 初期化
     renderExpandBtns();
+    updateDelayDisplay();
     await loadConfig();
     await autoDetect();
+
+    // 自動更新開始
+    if (autoRefreshEnabled) {
+        startAutoRefresh();
+    }
 });

@@ -25,7 +25,15 @@
         headings: [],
         expandLevel: 2.5,
         wrapText: true,
+        highlightEnabled: true,
         searchQuery: '',
+        // 自動更新機能
+        autoRefreshEnabled: true,
+        autoRefreshDelay: 1500, // ミリ秒
+        observer: null,
+        debounceTimer: null,
+        lastUpdateTime: null,
+        pendingUpdate: false,
 
         // パネルHTML生成
         createPanelHTML: function () {
@@ -57,12 +65,23 @@
                                 <button class="hd-btn-expand" data-level="5">5</button>
                                 <button class="hd-btn-expand" data-level="6">6</button>
                             </div>
+                            <button class="hd-btn-action active" id="hd-color-toggle" title="本文の色分けハイライト">Color</button>
                             <button class="hd-btn-action active" id="hd-wrap-toggle">Wrap</button>
                         </div>
                         <div class="hd-heading-list" id="hd-heading-list">
                             <ul class="hd-heading-tree" id="hd-tree"></ul>
                         </div>
                         <div class="hd-footer">
+                            <div class="hd-auto-refresh-row">
+                                <button class="hd-btn-refresh" id="hd-manual-refresh" title="手動更新">🔃</button>
+                                <button class="hd-btn-action active" id="hd-auto-toggle" title="DOM変更の自動追従">Auto</button>
+                                <div class="hd-delay-controls">
+                                    <button class="hd-btn-delay" id="hd-delay-down" title="遅延時間を減らす">−</button>
+                                    <span class="hd-delay-value" id="hd-delay-value">1.5s</span>
+                                    <button class="hd-btn-delay" id="hd-delay-up" title="遅延時間を増やす">+</button>
+                                </div>
+                                <span class="hd-status" id="hd-status">Ready</span>
+                            </div>
                             <div class="hd-legend">
                                 <span class="hd-badge native">✨ ネイティブ</span>
                                 <span class="hd-badge detected">✨ 検出</span>
@@ -244,6 +263,8 @@
                     border-radius: 4px;
                     cursor: pointer;
                     transition: all 0.15s;
+                }
+                .hd-btn-action:first-of-type {
                     margin-left: auto;
                 }
                 .hd-btn-action:hover {
@@ -393,11 +414,92 @@
                 .hd-resize-se { bottom: -3px; right: -3px; cursor: nwse-resize; }
                 .hd-resize-sw { bottom: -3px; left: -3px; cursor: nesw-resize; }
                 .hd-children {
-                    margin-left: 16px;
-                    margin-top: 4px;
+                    list-style: none;
+                    margin: 0;
+                    padding: 0;
+                    margin-left: 10px;
+                    margin-top: 2px;
+                    padding-left: 4px;
+                    border-left: 1px solid #0f3460;
                 }
                 .hd-children.collapsed {
                     display: none;
+                }
+                /* 自動更新コントロール */
+                .hd-auto-refresh-row {
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                    padding: 6px 8px;
+                    background: #16213e;
+                    border-radius: 6px;
+                    margin-bottom: 8px;
+                    flex-wrap: wrap;
+                }
+                .hd-btn-refresh {
+                    width: 28px;
+                    height: 28px;
+                    padding: 0;
+                    font-size: 14px;
+                    border: 1px solid #0f3460;
+                    background: transparent;
+                    color: #eee;
+                    border-radius: 4px;
+                    cursor: pointer;
+                    transition: all 0.15s;
+                }
+                .hd-btn-refresh:hover {
+                    background: #0f3460;
+                }
+                .hd-btn-refresh:active {
+                    transform: rotate(180deg);
+                }
+                .hd-delay-controls {
+                    display: flex;
+                    align-items: center;
+                    gap: 2px;
+                    background: #0f3460;
+                    border-radius: 4px;
+                    padding: 2px;
+                }
+                .hd-btn-delay {
+                    width: 22px;
+                    height: 22px;
+                    padding: 0;
+                    font-size: 12px;
+                    font-weight: bold;
+                    border: none;
+                    background: transparent;
+                    color: #aaa;
+                    border-radius: 3px;
+                    cursor: pointer;
+                    transition: all 0.15s;
+                }
+                .hd-btn-delay:hover {
+                    background: #1a1a2e;
+                    color: #fff;
+                }
+                .hd-delay-value {
+                    font-size: 10px;
+                    color: #8ec6ff;
+                    min-width: 28px;
+                    text-align: center;
+                    font-family: monospace;
+                }
+                .hd-status {
+                    flex: 1;
+                    font-size: 10px;
+                    color: #888;
+                    text-align: right;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                }
+                .hd-status.pending {
+                    color: #ffd93d;
+                }
+                .hd-status.updated {
+                    color: #00d9a0;
                 }
             `;
         },
@@ -504,6 +606,19 @@
                 self.renderTree();
             });
 
+            // Colorボタン（ハイライトトグル）
+            document.getElementById('hd-color-toggle').addEventListener('click', function () {
+                self.highlightEnabled = !self.highlightEnabled;
+                this.classList.toggle('active', self.highlightEnabled);
+                if (window.HeadingDetector) {
+                    if (self.highlightEnabled) {
+                        window.HeadingDetector.highlight(self.headings);
+                    } else {
+                        window.HeadingDetector.clearHighlight();
+                    }
+                }
+            });
+
             // 検索
             document.getElementById('hd-search').addEventListener('input', function () {
                 self.searchQuery = this.value.toLowerCase();
@@ -514,6 +629,36 @@
                 document.getElementById('hd-search').value = '';
                 self.searchQuery = '';
                 self.renderTree();
+            });
+
+            // 手動更新ボタン
+            document.getElementById('hd-manual-refresh').addEventListener('click', function () {
+                self.detect();
+                self.updateStatus('手動更新: ' + new Date().toLocaleTimeString(), 'updated');
+            });
+
+            // 自動更新トグル
+            document.getElementById('hd-auto-toggle').addEventListener('click', function () {
+                self.autoRefreshEnabled = !self.autoRefreshEnabled;
+                this.classList.toggle('active', self.autoRefreshEnabled);
+                if (self.autoRefreshEnabled) {
+                    self.setupAutoRefresh();
+                    self.updateStatus('自動更新: ON', 'updated');
+                } else {
+                    self.stopAutoRefresh();
+                    self.updateStatus('自動更新: OFF', '');
+                }
+            });
+
+            // 遅延時間調整
+            document.getElementById('hd-delay-down').addEventListener('click', function () {
+                self.autoRefreshDelay = Math.max(500, self.autoRefreshDelay - 500);
+                self.updateDelayDisplay();
+            });
+
+            document.getElementById('hd-delay-up').addEventListener('click', function () {
+                self.autoRefreshDelay = Math.min(5000, self.autoRefreshDelay + 500);
+                self.updateDelayDisplay();
             });
         },
 
@@ -597,12 +742,25 @@
 
         // 表示
         show: function () {
+            const isFirstShow = !this.panel;
             if (!this.panel) {
                 this.init();
             }
             this.panel.style.display = 'flex';
             this.isVisible = true;
+
+            // 初回表示時は右ドッキング
+            if (isFirstShow && !this.dockMode) {
+                this.dock('right');
+            }
+
             this.detect();
+            this.updateDelayDisplay();
+
+            // 自動更新開始
+            if (this.autoRefreshEnabled) {
+                this.setupAutoRefresh();
+            }
         },
 
         // 非表示
@@ -616,6 +774,8 @@
                 document.body.style.marginLeft = '';
                 document.body.style.marginRight = '';
             }
+            // 自動更新停止
+            this.stopAutoRefresh();
         },
 
         // トグル
@@ -758,7 +918,7 @@
                 html += '<li class="hd-tree-item">';
                 html += '<div class="' + rowClass + '">';
                 html += '<span class="hd-toggle ' + (hasChildren ? '' : 'no-children') + '">' +
-                    (hasChildren ? (shouldExpand ? '▼' : '▶') : '•') + '</span>';
+                    (hasChildren ? (shouldExpand ? '▼' : '▶') : '') + '</span>';
                 html += '<span class="' + badgeClass + '">' + badgeText + '</span>';
                 html += '<a class="' + linkClass + '" data-index="' + h.index + '">' +
                     self.escapeHtml(h.text) + '</a>';
@@ -801,6 +961,86 @@
                     }
                 });
             });
+        },
+
+        // 自動更新セットアップ
+        setupAutoRefresh: function () {
+            const self = this;
+
+            // 既存のオブザーバーを停止
+            this.stopAutoRefresh();
+
+            // メインコンテナを特定（Gemini/NotebookLM等）
+            const target = document.querySelector('main, [role="main"], .infinite-scroller')
+                || document.body;
+
+            this.observer = new MutationObserver(function (mutations) {
+                // パネル自体の変更は無視（自己除外）
+                if (mutations.every(function (m) {
+                    return self.panel && self.panel.contains(m.target);
+                })) {
+                    return;
+                }
+
+                // デバウンス処理
+                if (self.debounceTimer) {
+                    clearTimeout(self.debounceTimer);
+                }
+
+                self.pendingUpdate = true;
+                self.updateStatus('変更検出中...', 'pending');
+
+                self.debounceTimer = setTimeout(function () {
+                    if (self.isVisible && self.autoRefreshEnabled) {
+                        self.detect();
+                        self.lastUpdateTime = new Date();
+                        self.updateStatus('自動更新: ' + self.lastUpdateTime.toLocaleTimeString(), 'updated');
+                    }
+                    self.pendingUpdate = false;
+                }, self.autoRefreshDelay);
+            });
+
+            this.observer.observe(target, {
+                childList: true,
+                subtree: true,
+                characterData: false,  // テキスト変更は無視
+                attributes: false      // 属性変更は無視
+            });
+
+            this.updateStatus('自動更新: ON', '');
+        },
+
+        // 自動更新停止
+        stopAutoRefresh: function () {
+            if (this.observer) {
+                this.observer.disconnect();
+                this.observer = null;
+            }
+            if (this.debounceTimer) {
+                clearTimeout(this.debounceTimer);
+                this.debounceTimer = null;
+            }
+            this.pendingUpdate = false;
+        },
+
+        // ステータス更新
+        updateStatus: function (text, statusClass) {
+            const statusEl = document.getElementById('hd-status');
+            if (statusEl) {
+                statusEl.textContent = text;
+                statusEl.className = 'hd-status';
+                if (statusClass) {
+                    statusEl.classList.add(statusClass);
+                }
+            }
+        },
+
+        // 遅延時間表示更新
+        updateDelayDisplay: function () {
+            const delayEl = document.getElementById('hd-delay-value');
+            if (delayEl) {
+                delayEl.textContent = (this.autoRefreshDelay / 1000).toFixed(1) + 's';
+            }
         },
 
         escapeHtml: function (str) {

@@ -283,7 +283,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             // トグルボタン
             const toggle = document.createElement('span');
             toggle.className = 'toggle';
-            toggle.textContent = hasChildren ? (isCollapsed ? '▶' : '▼') : '•';
+            toggle.textContent = hasChildren ? (isCollapsed ? '▶' : '▼') : '';
             if (!hasChildren) toggle.classList.add('no-children');
 
             // レベルバッジ

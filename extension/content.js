@@ -405,11 +405,24 @@
     // グローバルに公開
     window.HeadingDetector = HeadingDetector;
 
+    // 変更検出用の状態
+    let lastHeadingCount = 0;
+    let lastHeadingHash = '';
+
+    // 見出しのハッシュを計算（簡易的な変更検出）
+    function computeHeadingHash(headings) {
+        return headings.map(h => h.text.substring(0, 20) + h.level).join('|');
+    }
+
     // メッセージリスナー（ポップアップからの指示を受信）
     api.runtime.onMessage.addListener((request, sender, sendResponse) => {
         if (request.action === 'detect') {
             const headings = HeadingDetector.detect();
             HeadingDetector.highlight(headings);
+
+            // 変更検出用に現在の状態を保存
+            lastHeadingCount = headings.length;
+            lastHeadingHash = computeHeadingHash(headings);
 
             // 要素を除いたデータを返す
             const result = headings.map((h, index) => ({
@@ -426,6 +439,13 @@
             }));
 
             sendResponse({ success: true, headings: result });
+        } else if (request.action === 'checkForChanges') {
+            // DOM変更を検出（軽量チェック）
+            const headings = HeadingDetector.detect();
+            const currentHash = computeHeadingHash(headings);
+            const hasChanges = (headings.length !== lastHeadingCount) || (currentHash !== lastHeadingHash);
+
+            sendResponse({ success: true, hasChanges: hasChanges });
         } else if (request.action === 'scrollTo') {
             HeadingDetector.scrollToHeading(request.index);
             sendResponse({ success: true });
