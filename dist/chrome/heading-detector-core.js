@@ -283,6 +283,36 @@
     },
 
     /**
+     * ページのスクロールコンテナを特定
+     */
+    getScrollContainer: function () {
+        if (this.mainPane && this.mainPane.scrollHeight > this.mainPane.clientHeight) {
+            return this.mainPane;
+        }
+        return window;
+    },
+
+    /**
+     * ページを特定の見出し要素までスクロール
+     */
+    scrollToHeading: function (targetEl) {
+        const container = this.getScrollContainer();
+        const isWindow = (container === window);
+        const currentScroll = isWindow ? window.scrollY : container.scrollTop;
+        const rect = targetEl.getBoundingClientRect();
+        const containerTop = isWindow ? 0 : container.getBoundingClientRect().top;
+        const targetTopRel = currentScroll + rect.top - containerTop;
+        // 見出しを画面上部に表示（20pxのマージン）
+        const targetScrollPos = targetTopRel - 20;
+
+        if (isWindow) window.scrollTo({ top: targetScrollPos, behavior: 'smooth' });
+        else container.scrollTo({ top: targetScrollPos, behavior: 'smooth' });
+
+        // Highlight using the core HeadingDetector's highlight function
+        this.highlight([{ element: targetEl }]);
+    },
+
+    /**
      * 重複を除去（親子関係にある要素）
      */
     removeDuplicates: function(headings) {

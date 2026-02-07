@@ -68,8 +68,14 @@
 
             sendResponse({ success: true, hasChanges: hasChanges });
         } else if (request.action === 'scrollTo') {
-            window.HeadingDetector.scrollToHeading(request.index);
-            sendResponse({ success: true });
+            const heading = window.HeadingDetector.headings[request.index];
+            if (heading && heading.element) {
+                window.HeadingDetector.scrollToHeading(heading.element);
+                sendResponse({ success: true });
+            } else {
+                console.warn('Heading element not found for index:', request.index);
+                sendResponse({ success: false, error: 'Heading element not found' });
+            }
         } else if (request.action === 'clear') {
             window.HeadingDetector.clearHighlight();
             sendResponse({ success: true });
