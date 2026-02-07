@@ -55,7 +55,7 @@ const CHROME_MANIFEST = {
     },
     content_scripts: [{
         matches: ["<all_urls>"],
-        js: ["content.js", "panel.js"],
+        js: ["heading-detector-core.js", "content.js", "panel.js"],
         run_at: "document_end"
     }],
     side_panel: {
@@ -72,7 +72,7 @@ const FIREFOX_MANIFEST = {
     },
     content_scripts: [{
         matches: ["<all_urls>"],
-        js: ["content.js", "panel.js"],
+        js: ["heading-detector-core.js", "content.js", "panel.js"],
         run_at: "document_end"
     }],
     browser_specific_settings: {
@@ -119,6 +119,12 @@ function build(browser) {
 
     // Clean and create destination directory
     cleanDir(destDir);
+
+    // Copy core heading detector file
+    const coreSrc = path.join(ROOT_DIR, 'src', 'core', 'heading-detector.js');
+    const coreDest = path.join(destDir, 'heading-detector-core.js');
+    fs.copyFileSync(coreSrc, coreDest);
+    console.log(`  Copied: src/core/heading-detector.js to heading-detector-core.js`);
 
     // Copy shared files
     SHARED_FILES.forEach(file => {

@@ -19,15 +19,7 @@ javascript: (function () {
         btnText: '#c4c7c5',
         btnHover: '#4f545c',
         activeBtnBg: '#0b57d0',
-        activeBtnText: '#ffffff',
-        h1: 'rgba(255, 107, 107, 0.8)',
-        h2: 'rgba(255, 159, 67, 0.8)',
-        h3: 'rgba(255, 220, 0, 0.8)',
-        h4: 'rgba(72, 219, 251, 0.8)',
-        h5: 'rgba(162, 155, 254, 0.8)',
-        h6: 'rgba(200, 200, 200, 0.8)',
-        query: 'rgba(100, 200, 255, 0.8)',
-        response: 'rgba(180, 130, 255, 0.8)'
+        activeBtnText: '#ffffff'
     };
 
     var config = {
@@ -50,320 +42,9 @@ javascript: (function () {
         return el;
     }
 
-    // メインコンテンツペインの検出（幅が最も広いスクロール可能ペイン）
-    function detectMainPane() {
-        var hostname = win.location.hostname;
-
-        // すべてのスクロール可能要素を収集
-        var allScrollables = Array.from(doc.querySelectorAll('*')).filter(function (el) {
-            var style = win.getComputedStyle(el);
-            var isScrollable = (style.overflowY === 'auto' || style.overflowY === 'scroll');
-            var hasScroll = el.scrollHeight > el.clientHeight + 50;
-            var isVisible = el.offsetParent !== null || el === doc.body;
-            return isScrollable && hasScroll && isVisible;
-        });
-
-        // 幅でソート（最も広いものを優先）
-        allScrollables.sort(function (a, b) {
-            return b.clientWidth - a.clientWidth;
-        });
-
-        // 幅が画面の40%以上のものを優先
-        var mainCandidates = allScrollables.filter(function (el) {
-            return el.clientWidth > win.innerWidth * 0.4;
-        });
-
-        if (mainCandidates.length > 0) {
-            return mainCandidates[0];
-        }
-
-        // フォールバック: 一般的なセレクタ
-        if (hostname.includes('gemini.google.com')) {
-            return doc.querySelector('main[role="main"]') || allScrollables[0] || null;
-        }
-        if (hostname.includes('notebooklm.google.com')) {
-            return doc.querySelector('main, [role="main"]') || allScrollables[0] || null;
-        }
-
-        return doc.querySelector('main, [role="main"], article') || allScrollables[0] || null;
-    }
-
-    // Geminiのチャット要素を検出
-    function detectGeminiChatItems(mainPane) {
-        var items = [];
-        var hostname = win.location.hostname;
-
-        if (!hostname.includes('gemini.google.com')) return items;
-
-        // ユーザーのクエリ（H2タグ）を検出
-        var queryHeadings = doc.querySelectorAll('h2');
-        queryHeadings.forEach(function (h2) {
-            // メインペイン内のH2のみ対象
-            if (mainPane && !mainPane.contains(h2)) return;
-            // 回答コンテナ内のH2は除外（回答内見出しとして別途処理）
-            if (h2.closest('[data-message-author-role="model"]') ||
-                h2.closest('.model-response') ||
-                h2.closest('[class*="model-response"]')) return;
-
-            var text = h2.textContent.trim();
-            if (text && text.length > 2) {
-                items.push({
-                    element: h2,
-                    text: text.substring(0, 100),
-                    level: 2,
-                    isQuery: true,
-                    isResponse: false,
-                    isNative: true,
-                    isInMainPane: true
-                });
-            }
-        });
-
-        // AIの回答（model-response）の冒頭部分を検出
-        var modelResponses = doc.querySelectorAll('[data-message-author-role="model"], .model-response, [class*="model-response"]');
-        modelResponses.forEach(function (resp) {
-            if (mainPane && !mainPane.contains(resp)) return;
-
-            // 回答内の最初の段落またはテキストブロックを取得
-            var firstPara = resp.querySelector('p, .markdown-content > *:first-child, [class*="response-text"] > *:first-child');
-            if (!firstPara) {
-                // フォールバック: 直接のテキストノードを探す
-                var walker = doc.createTreeWalker(resp, NodeFilter.SHOW_TEXT, null, false);
-                var firstText = walker.nextNode();
-                if (firstText && firstText.textContent.trim().length > 10) {
-                    firstPara = firstText.parentElement;
-                }
-            }
-
-            if (firstPara) {
-                var text = firstPara.textContent.trim();
-                // 最初の一文を抽出（。や.で終わる最初の文）
-                var firstSentence = text.match(/^[^。.!?！？]+[。.!?！？]?/);
-                if (firstSentence) {
-                    text = firstSentence[0];
-                }
-                if (text.length > 100) {
-                    text = text.substring(0, 97) + '...';
-                }
-
-                if (text && text.length > 5) {
-                    items.push({
-                        element: firstPara,
-                        text: text,
-                        level: 2.5,  // H2とH3の間（応答内のH3〜H6がこの下にぶら下がる）
-                        isQuery: false,
-                        isResponse: true,
-                        isNative: false,
-                        isInMainPane: true
-                    });
-                }
-            }
-
-            // 回答内のHタグも見出しとして抽出
-            // レベルを 2.5 + (元レベル/10) にして、必ず回答の子要素になるようにする
-            var responseHeadings = resp.querySelectorAll('h1, h2, h3, h4, h5, h6');
-            responseHeadings.forEach(function (h) {
-                var text = h.textContent.trim();
-                var originalLvl = parseInt(h.tagName.charAt(1));
-                // H1→2.51, H2→2.52, H3→2.53... として回答(2.5)の子に配置
-                var effectiveLevel = 2.5 + (originalLvl / 10);
-                if (text && text.length > 2) {
-                    items.push({
-                        element: h,
-                        text: text.substring(0, 100),
-                        level: effectiveLevel,
-                        originalLevel: originalLvl,  // 表示用に元のレベルを保持
-                        isQuery: false,
-                        isResponse: false,
-                        isInsideResponse: true,  // 回答内フラグ
-                        isNative: true,
-                        isInMainPane: true
-                    });
-                }
-            });
-        });
-
-        return items;
-    }
-
-    function getScrollContainer() {
-        var mainPane = detectMainPane();
-        if (mainPane && mainPane.scrollHeight > mainPane.clientHeight) {
-            return mainPane;
-        }
-        return win;
-    }
-
-    function smartScrollTo(targetEl) {
-        var container = getScrollContainer();
-        var isWindow = (container === win);
-        var currentScroll = isWindow ? win.scrollY : container.scrollTop;
-        var rect = targetEl.getBoundingClientRect();
-        var containerTop = isWindow ? 0 : container.getBoundingClientRect().top;
-        var targetTopRel = currentScroll + rect.top - containerTop;
-        // 見出しを画面上部に表示（20pxのマージン）
-        var targetScrollPos = targetTopRel - 20;
-
-        if (isWindow) win.scrollTo({ top: targetScrollPos, behavior: 'smooth' });
-        else container.scrollTo({ top: targetScrollPos, behavior: 'smooth' });
-
-        highlightElement(targetEl);
-    }
-
-    function highlightElement(el) {
-        var originalBg = el.style.backgroundColor;
-        el.style.transition = 'background 0.3s ease-out';
-        el.style.backgroundColor = THEME.highlight;
-        setTimeout(function () {
-            el.style.backgroundColor = originalBg;
-            setTimeout(function () { el.style.transition = ''; }, 300);
-        }, 1500);
-    }
-
-    function isInMainPane(element, mainPane) {
-        if (!mainPane) return false;
-        return mainPane.contains(element);
-    }
-
-    // 検出メイン
-    function detectAllHeadings() {
-        var mainPane = detectMainPane();
-        var allHeadings = [];
-        var hostname = win.location.hostname;
-        var addedElements = new Set();
-
-        // Gemini専用のチャット検出
-        if (hostname.includes('gemini.google.com')) {
-            var chatItems = detectGeminiChatItems(mainPane);
-            chatItems.forEach(function (item) {
-                if (!addedElements.has(item.element)) {
-                    addedElements.add(item.element);
-                    allHeadings.push(item);
-                }
-            });
-        }
-
-        // ネイティブ見出し（H1-H6）を検出
-        var nativeHeadings = doc.querySelectorAll('h1, h2, h3, h4, h5, h6, [role="heading"]');
-        nativeHeadings.forEach(function (h) {
-            if (addedElements.has(h)) return; // 既に追加済みならスキップ
-
-            var text = h.textContent.trim();
-            if (!text || text.length < 2) return;
-
-            var lvl = h.tagName.match(/^H([1-6])$/) ? parseInt(h.tagName.charAt(1)) : (parseInt(h.getAttribute('aria-level')) || 3);
-            var inMain = isInMainPane(h, mainPane);
-
-            addedElements.add(h);
-            allHeadings.push({
-                element: h,
-                text: text.substring(0, 100),
-                level: lvl,
-                score: 100,
-                isNative: true,
-                isQuery: false,
-                isResponse: false,
-                isInMainPane: inMain
-            });
-        });
-
-        // スタイル解析による見出し検出（メインペイン外のみ、または一般ページ）
-        if (!hostname.includes('gemini.google.com') || !mainPane) {
-            var baseFontSize = parseFloat(win.getComputedStyle(doc.body).fontSize) || 16;
-            var selectors = 'p, div, span, li, strong, b, em';
-            var elements = doc.querySelectorAll(selectors);
-
-            var candidates = [];
-            elements.forEach(function (el) {
-                if (addedElements.has(el)) return;
-                if (el.offsetParent === null && el.tagName !== 'BODY') return;
-
-                // 見出しタグ内の要素はスキップ
-                var insideHeading = false;
-                nativeHeadings.forEach(function (h) {
-                    if (h.contains(el)) insideHeading = true;
-                });
-                if (insideHeading) return;
-
-                var style = win.getComputedStyle(el);
-                var fontSize = parseFloat(style.fontSize);
-                var fontWeight = parseInt(style.fontWeight) || 400;
-                var text = el.textContent.trim();
-
-                if (!text || text.length > 150 || text.length < 3) return;
-                if (el.children.length > 5) return;
-
-                var isBigger = fontSize >= baseFontSize * 1.15;
-                var isBold = fontWeight >= 600;
-
-                if (!isBigger && !isBold) return;
-
-                var score = 0;
-                var level = 6;
-
-                if (isBigger) {
-                    score += 30;
-                    var ratio = fontSize / baseFontSize;
-                    if (ratio >= 2.0) level = 1;
-                    else if (ratio >= 1.6) level = 2;
-                    else if (ratio >= 1.3) level = 3;
-                    else if (ratio >= 1.15) level = 4;
-                    else level = 5;
-                }
-
-                if (isBold) {
-                    score += 25;
-                    if (level > 3) level = Math.max(level - 1, 1);
-                }
-
-                if (['block', 'flex', 'grid'].includes(style.display)) score += 15;
-                if (text.length <= 50) score += 10;
-
-                if (score >= 40) {
-                    candidates.push({
-                        element: el,
-                        text: text.substring(0, 100),
-                        level: level,
-                        score: score,
-                        isNative: false,
-                        isQuery: false,
-                        isResponse: false,
-                        isInMainPane: isInMainPane(el, mainPane)
-                    });
-                }
-            });
-
-            // スコア順にソート
-            candidates.sort(function (a, b) { return b.score - a.score; });
-
-            // 重複削除
-            candidates.forEach(function (c) {
-                var isDup = false;
-                addedElements.forEach(function (added) {
-                    if (added.contains(c.element) || c.element.contains(added)) {
-                        isDup = true;
-                    }
-                });
-                if (!isDup) {
-                    addedElements.add(c.element);
-                    allHeadings.push(c);
-                }
-            });
-        }
-
-        // DOMの出現順にソート
-        allHeadings.sort(function (a, b) {
-            var pos = a.element.compareDocumentPosition(b.element);
-            return pos & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1;
-        });
-
-        return { headings: allHeadings, mainPane: mainPane };
-    }
-
     // 検出実行
-    var result = detectAllHeadings();
-    var headings = result.headings;
-    var mainPane = result.mainPane;
+    HeadingDetector.detect(); // Run detection to populate HeadingDetector.headings
+    var headings = HeadingDetector.headings;
 
     // ウィジェット作成
     var container = createEl('div', '');
@@ -501,9 +182,37 @@ javascript: (function () {
 
     container.appendChild(header);
 
-    // コンテンツ
-    var content = createEl('div', 'flex-grow:1;overflow-y:auto;padding:12px;background:' + THEME.bg + ';');
-    container.appendChild(content);
+
+
+
+
+
+
+
+
+    function getScrollContainer() {
+        if (HeadingDetector.mainPane && HeadingDetector.mainPane.scrollHeight > HeadingDetector.mainPane.clientHeight) {
+            return HeadingDetector.mainPane;
+        }
+        return win;
+    }
+
+    function smartScrollTo(targetEl) {
+        var container = getScrollContainer();
+        var isWindow = (container === win);
+        var currentScroll = isWindow ? win.scrollY : container.scrollTop;
+        var rect = targetEl.getBoundingClientRect();
+        var containerTop = isWindow ? 0 : container.getBoundingClientRect().top;
+        var targetTopRel = currentScroll + rect.top - containerTop;
+        // 見出しを画面上部に表示（20pxのマージン）
+        var targetScrollPos = targetTopRel - 20;
+
+        if (isWindow) win.scrollTo({ top: targetScrollPos, behavior: 'smooth' });
+        else container.scrollTo({ top: targetScrollPos, behavior: 'smooth' });
+
+        // Highlight using the core HeadingDetector's highlight function
+        HeadingDetector.highlight([{ element: targetEl }]);
+    }
 
     function markSearchMatches(nodes, query) {
         if (!query) return false;
@@ -531,11 +240,11 @@ javascript: (function () {
     }
 
     function getLevelColor(heading) {
-        if (heading.isQuery) return THEME.query;
-        if (heading.isResponse) return THEME.response;
+        if (heading.isQuery) return HeadingDetector.config.highlightColors.query;
+        if (heading.isResponse) return HeadingDetector.config.highlightColors.response;
         // 回答内の見出しは元のレベルで色を決定
         var displayLevel = heading.originalLevel || Math.floor(heading.level);
-        return THEME['h' + displayLevel] || THEME.h6;
+        return HeadingDetector.config.highlightColors['h' + displayLevel] || HeadingDetector.config.highlightColors.h6;
     }
 
     function getBadgeText(heading) {
@@ -678,13 +387,25 @@ javascript: (function () {
         return ul;
     }
 
+
+
+
+
+
+
+
+
+
+
+
+
     function renderTree() {
         content.textContent = '';
-        if (headings.length === 0) {
+        if (HeadingDetector.headings.length === 0) {
             content.appendChild(createEl('div', 'color:#888;text-align:center;padding:30px;', '見出しが見つかりませんでした'));
             return;
         }
-        var tree = buildTree(headings);
+        var tree = buildTree(HeadingDetector.headings);
 
         if (config.searchQuery) {
             markSearchMatches(tree, config.searchQuery);

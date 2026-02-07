@@ -1,6 +1,10 @@
 const fs = require('fs');
 
-let code = fs.readFileSync('bookmarklet/bookmarklet.js', 'utf8');
+let coreCode = fs.readFileSync('src/core/heading-detector.js', 'utf8');
+let bookmarkletCode = fs.readFileSync('bookmarklet/bookmarklet.js', 'utf8');
+
+// Combine core code and bookmarklet code
+let code = coreCode + bookmarkletCode;
 
 // Remove the initial 'javascript: ' prefix if present
 code = code.replace(/^\s*javascript:\s*/i, '');

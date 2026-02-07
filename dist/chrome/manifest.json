@@ -31,6 +31,7 @@
         "<all_urls>"
       ],
       "js": [
+        "heading-detector-core.js",
         "content.js",
         "panel.js"
       ],
