@@ -134,12 +134,21 @@ document.addEventListener('DOMContentLoaded', async () => {
         try {
             const [tab] = await api.tabs.query({ active: true, currentWindow: true });
 
+            // 特殊なページ（chrome://, about:, etc.）はスキップ
+            if (!tab.url || tab.url.startsWith('chrome://') || tab.url.startsWith('about:') || tab.url.startsWith('edge://')) {
+                showToast('このページでは実行できません', 'error');
+                return;
+            }
+
             // 検出を実行（リトライ付き）
             let response = null;
             let lastError = null;
-            for (let attempt = 0; attempt < 5; attempt++) {
+            const maxAttempts = 5;
+            const baseWaitMs = 300;
+
+            for (let attempt = 0; attempt < maxAttempts; attempt++) {
                 try {
-                    // Chrome/Edge の場合は毎回 scripting.executeScript を試みる
+                    // Chrome/Edge の場合は scripting.executeScript を試みる
                     // Firefox は content_scripts で自動注入されるため不要
                     if (api.scripting && api.scripting.executeScript) {
                         try {
@@ -147,10 +156,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                                 target: { tabId: tab.id },
                                 files: ['content.js']
                             });
-                            // スクリプト注入後、少し待機
-                            await new Promise(resolve => setTimeout(resolve, 100));
+                            // スクリプト注入後、十分な待機時間を確保
+                            await new Promise(resolve => setTimeout(resolve, 200));
                         } catch (e) {
-                            console.log('Script injection error (may already be injected):', e.message);
+                            // 既に注入済みの場合はエラーになるが問題ない
+                            console.log('Script injection note:', e.message);
                         }
                     }
 
@@ -161,8 +171,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 } catch (e) {
                     lastError = e;
                     // コンテンツスクリプトがまだ準備できていない可能性がある
-                    console.log(`Attempt ${attempt + 1} failed, retrying...`);
-                    await new Promise(resolve => setTimeout(resolve, 500));
+                    console.log(`Attempt ${attempt + 1}/${maxAttempts} failed:`, e.message);
+                    // 徐々に待機時間を延長（300, 600, 900, 1200, 1500ms）
+                    await new Promise(resolve => setTimeout(resolve, baseWaitMs * (attempt + 1)));
                 }
             }
 
@@ -170,7 +181,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                 currentHeadings = response.headings;
                 renderHeadings(currentHeadings);
             } else {
-                throw lastError || new Error('検出に失敗しました');
+                const errorMsg = lastError?.message || '検出に失敗しました';
+                if (errorMsg.includes('Receiving end does not exist')) {
+                    showToast('ページを再読み込みしてください', 'error');
+                } else {
+                    throw lastError || new Error('検出に失敗しました');
+                }
             }
         } catch (error) {
             console.error('Detection error:', error);

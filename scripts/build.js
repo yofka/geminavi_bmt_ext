@@ -53,6 +53,11 @@ const CHROME_MANIFEST = {
     background: {
         service_worker: "background.js"
     },
+    content_scripts: [{
+        matches: ["<all_urls>"],
+        js: ["content.js", "panel.js"],
+        run_at: "document_idle"
+    }],
     side_panel: {
         default_path: "sidepanel.html"
     }
