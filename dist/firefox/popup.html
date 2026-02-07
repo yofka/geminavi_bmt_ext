@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Heading Detector</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+
+<body>
+  <div class="container" id="container">
+    <header class="header" id="header">
+      <div class="header-top">
+        <span class="result-count"><span id="resultCount">0</span> 件の見出しを検出</span>
+        <span class="stats-compact" id="statsCompact"></span>
+      </div>
+    </header>
+
+    <div class="search-row">
+      <input type="text" id="searchInput" class="search-input" placeholder="🔎 見出しを検索...">
+      <button id="searchClear" class="btn btn-small">✕</button>
+    </div>
+
+    <div class="button-row">
+      <div id="expandBtns" class="expand-btns"></div>
+      <button id="wrapBtn" class="btn btn-action">Wrap</button>
+      <button id="panelToggle" class="btn btn-action" title="インページパネルを表示">Panel</button>
+      <button id="modeToggle" class="btn btn-action">Popup</button>
+    </div>
+
+    <div id="headingList" class="heading-list"></div>
+
+    <footer class="footer">
+      <span class="legend">
+        <span class="badge native">✨ ネイティブ</span>
+        <span class="badge detected">✨ 検出</span>
+        <span class="badge query">💬 クエリ</span>
+        <span class="badge response">💭 回答</span>
+      </span>
+    </footer>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <script src="popup.js"></script>
+</body>
+
+</html>

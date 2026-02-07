@@ -1,5 +1,5 @@
 # Build output
-dist/
+# dist/ (Tracked as requested)
 
 # Node
 node_modules/
