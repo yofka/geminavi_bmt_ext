@@ -228,7 +228,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             const [tab] = await api.tabs.query({ active: true, currentWindow: true });
 
             // 特殊なページ（chrome://, about:, etc.）はスキップ
-            if (!tab.url || tab.url.startsWith('chrome://') || tab.url.startsWith('about:') || tab.url.startsWith('edge://') || tab.url.startsWith('moz-extension://')) {
+            // 注意: サイドパネルでは activeTab 権限がないため tab.url が undefined の場合がある
+            // その場合は URL チェックをスキップして処理を続行する
+            if (tab.url && (tab.url.startsWith('chrome://') || tab.url.startsWith('about:') || tab.url.startsWith('edge://') || tab.url.startsWith('moz-extension://') || tab.url.startsWith('chrome-extension://'))) {
                 showToast('このページでは実行できません', 'error');
                 return;
             }
