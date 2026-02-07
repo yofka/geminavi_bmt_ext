@@ -6,7 +6,10 @@
 // API名前空間の抽象化（Firefox/Chrome両対応）
 const api = typeof browser !== 'undefined' ? browser : chrome;
 
+console.log('sidepanel.js loaded (top of file)'); // 追加
+
 document.addEventListener('DOMContentLoaded', async () => {
+    console.log('DOMContentLoaded fired.'); // 追加
     const searchInput = document.getElementById('searchInput');
     const searchClear = document.getElementById('searchClear');
     const expandBtns = document.getElementById('expandBtns');
@@ -220,6 +223,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 自動検出を実行
     async function autoDetect() {
+        console.log('autoDetect() called.'); // 追加
         try {
             const [tab] = await api.tabs.query({ active: true, currentWindow: true });
 
@@ -234,7 +238,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 try {
                     await api.scripting.executeScript({
                         target: { tabId: tab.id },
-                        files: ['content.js']
+                        files: ['heading-detector-core.js', 'content.js']
                     });
                     // スクリプト注入後、十分な待機時間を確保
                     await new Promise(resolve => setTimeout(resolve, 150));
@@ -290,6 +294,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
 
             if (response && response.success) {
+                console.log('autoDetect: Headings detected successfully. Count:', response.headings.length); // 追加
                 currentHeadings = response.headings;
                 renderHeadings(currentHeadings);
             } else {
@@ -473,6 +478,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 見出しリストをレンダリング
     function renderHeadings(headings) {
+        console.log('renderHeadings() called. Headings count:', headings.length, 'Headings:', headings); // 追加
         headingList.innerHTML = '';
         resultCount.textContent = headings.length;
 
@@ -510,3 +516,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         startAutoRefresh();
     }
 });
+
+console.log('DOMContentLoaded listener registered.'); // 追加
+

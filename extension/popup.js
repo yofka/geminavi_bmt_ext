@@ -145,7 +145,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 try {
                     await api.scripting.executeScript({
                         target: { tabId: tab.id },
-                        files: ['content.js']
+                        files: ['heading-detector-core.js', 'content.js']
                     });
                     // スクリプト注入後、十分な待機時間を確保
                     await new Promise(resolve => setTimeout(resolve, 150));

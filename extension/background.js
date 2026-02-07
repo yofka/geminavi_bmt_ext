@@ -120,7 +120,7 @@ api.runtime.onMessage.addListener((request, sender, sendResponse) => {
                     try {
                         await api.scripting.executeScript({
                             target: { tabId: tab.id },
-                            files: ['content.js']
+                            files: ['heading-detector-core.js', 'content.js']
                         });
                         await api.scripting.executeScript({
                             target: { tabId: tab.id },
