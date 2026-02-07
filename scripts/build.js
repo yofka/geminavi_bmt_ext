@@ -56,7 +56,7 @@ const CHROME_MANIFEST = {
     content_scripts: [{
         matches: ["<all_urls>"],
         js: ["content.js", "panel.js"],
-        run_at: "document_idle"
+        run_at: "document_end"
     }],
     side_panel: {
         default_path: "sidepanel.html"
@@ -73,7 +73,7 @@ const FIREFOX_MANIFEST = {
     content_scripts: [{
         matches: ["<all_urls>"],
         js: ["content.js", "panel.js"],
-        run_at: "document_idle"
+        run_at: "document_end"
     }],
     browser_specific_settings: {
         gecko: {

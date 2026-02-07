@@ -69,6 +69,13 @@ api.runtime.onStartup.addListener(async () => {
 
 // メッセージリスナー（ポップアップ/サイドパネルからの設定変更を受信）
 api.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    // Content script が準備完了したことを記録
+    if (request.action === 'contentScriptReady') {
+        console.log('Content script is ready in tab:', sender.tab?.id);
+        sendResponse({ success: true });
+        return true;
+    }
+
     if (request.action === 'setDisplayMode') {
         (async () => {
             await saveConfig({ displayMode: request.mode });

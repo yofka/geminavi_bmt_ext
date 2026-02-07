@@ -34,7 +34,7 @@
                 "content.js",
                 "panel.js"
             ],
-            "run_at": "document_idle"
+            "run_at": "document_end"
         }
     ],
     "browser_specific_settings": {

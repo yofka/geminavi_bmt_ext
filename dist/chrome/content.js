@@ -416,6 +416,11 @@
 
     // メッセージリスナー（ポップアップからの指示を受信）
     api.runtime.onMessage.addListener((request, sender, sendResponse) => {
+        if (request.action === 'ping') {
+            // コンテンツスクリプトが準備完了しているか確認用
+            sendResponse({ success: true, ready: true });
+            return true;
+        }
         if (request.action === 'detect') {
             const headings = HeadingDetector.detect();
             HeadingDetector.highlight(headings);
@@ -455,5 +460,15 @@
         }
         return true; // 非同期レスポンスのため
     });
+
+    // Background へ初期化完了を通知（特にFirefox向け）
+    setTimeout(() => {
+        try {
+            api.runtime.sendMessage({ action: 'contentScriptReady' })
+                .catch(err => console.log('Content script ready notification (expected in some contexts):', err.message));
+        } catch (e) {
+            // ポップアップやサイドパネルのコンテキストでは失敗するが、問題ない
+        }
+    }, 50);
 
 })();
