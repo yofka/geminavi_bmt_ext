@@ -410,7 +410,9 @@
       });
 
       // 最大検出数で切り詰める
-      return allHeadings.slice(0, config.maxHeadings);
+      // 検出した見出しを this.headings に代入する
+      this.headings = allHeadings.slice(0, config.maxHeadings);
+      return this.headings;
     },
 
     /**
