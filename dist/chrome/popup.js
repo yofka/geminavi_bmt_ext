@@ -47,6 +47,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                 updateExpandBtns();
                 updateWrapBtn();
                 updateModeToggle();
+                // 色設定を適用
+                if (window.HDSettings) {
+                    if (config.colors) {
+                        window.HDSettings.colors = { ...window.HDSettings.getDefaultColors(), ...config.colors };
+                    }
+                    window.HDSettings.applyColors();
+                }
             }
         } catch (error) {
             console.error('Failed to load config:', error);
@@ -112,6 +119,16 @@ document.addEventListener('DOMContentLoaded', async () => {
             showToast('パネル表示エラー: ' + error.message, 'error');
         }
     });
+
+    // 設定ボタン
+    const settingsBtn = document.getElementById('settingsBtn');
+    if (settingsBtn && window.HDSettings) {
+        settingsBtn.addEventListener('click', () => {
+            window.HDSettings.open(() => {
+                // 色が変更されたときにUIを更新
+            });
+        });
+    }
 
     // 検索機能
     searchInput.addEventListener('input', () => {
@@ -292,6 +309,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             const row = document.createElement('div');
             row.className = 'tree-row';
+            // レベルを data 属性として設定（CSS セレクタ用）
+            const levelKey = node.heading.isQuery ? 'query' : node.heading.isResponse ? 'response' : Math.floor(node.level);
+            row.dataset.level = levelKey;
 
             const hasChildren = node.children.length > 0;
             const inGemini = parentInGemini || isInGeminiConversation(node);

@@ -1,7 +1,7 @@
 :root {
-  --bg-primary: #1a1a2e;
-  --bg-secondary: #16213e;
-  --bg-tertiary: #0f3460;
+  --bg-primary: var(--hd-panel-bg, #000000);
+  --bg-secondary: var(--hd-row-bg, #000000);
+  --bg-tertiary: var(--hd-row-hover-bg, #1a1a1a);
   --text-primary: #eee;
   --text-secondary: #aaa;
   --accent-primary: #e94560;
@@ -10,14 +10,14 @@
   --success: #00d9a0;
   --warning: #ffd93d;
   --border-radius: 8px;
-  --h1-color: rgba(255, 107, 107, 0.8);
-  --h2-color: rgba(255, 159, 67, 0.8);
-  --h3-color: rgba(255, 220, 0, 0.8);
-  --h4-color: rgba(72, 219, 251, 0.8);
-  --h5-color: rgba(162, 155, 254, 0.8);
-  --h6-color: rgba(200, 200, 200, 0.8);
-  --query-color: rgba(100, 200, 255, 0.8);
-  --response-color: rgba(180, 130, 255, 0.8);
+  --h1-color: var(--hd-h1-bg, #000000);
+  --h2-color: var(--hd-h2-bg, #000000);
+  --h3-color: var(--hd-h3-bg, #000000);
+  --h4-color: var(--hd-h4-bg, #000000);
+  --h5-color: var(--hd-h5-bg, #000000);
+  --h6-color: var(--hd-h6-bg, #000000);
+  --query-color: var(--hd-query-bg, #000000);
+  --response-color: var(--hd-response-bg, #000000);
 }
 
 * {
@@ -41,13 +41,13 @@ body {
   gap: 10px;
 }
 
-/* ヘッダー */
+/* ヘッダー - パネル背景のみ使用 */
 .header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 8px 10px;
-  background: var(--bg-secondary);
+  background: var(--bg-primary);
   border-radius: var(--border-radius);
 }
 
@@ -245,7 +245,7 @@ body {
   flex-shrink: 0;
   width: 14px;
   font-size: 10px;
-  color: var(--text-secondary);
+  color: var(--hd-toggle-btn, #888);
   cursor: pointer;
   user-select: none;
   margin-top: 2px;
@@ -266,49 +266,98 @@ body {
 }
 
 .level-badge.main-pane {
-  box-shadow: 0 0 0 2px rgba(100, 255, 100, 0.5);
+  box-shadow: 0 0 0 2px var(--hd-main-pane-indicator, #fff);
 }
 
 .badge-h1 {
   background: var(--h1-color);
+  color: var(--hd-h1-text, #666);
+  border: 1px solid var(--hd-h1-border, #000);
 }
 
 .badge-h2 {
   background: var(--h2-color);
+  color: var(--hd-h2-text, #666);
+  border: 1px solid var(--hd-h2-border, #000);
 }
 
 .badge-h3 {
   background: var(--h3-color);
+  color: var(--hd-h3-text, #666);
+  border: 1px solid var(--hd-h3-border, #000);
 }
 
 .badge-h4 {
   background: var(--h4-color);
+  color: var(--hd-h4-text, #666);
+  border: 1px solid var(--hd-h4-border, #000);
 }
 
 .badge-h5 {
   background: var(--h5-color);
+  color: var(--hd-h5-text, #666);
+  border: 1px solid var(--hd-h5-border, #000);
 }
 
 .badge-h6 {
   background: var(--h6-color);
+  color: var(--hd-h6-text, #666);
+  border: 1px solid var(--hd-h6-border, #000);
 }
 
 .badge-query {
   background: var(--query-color);
+  color: var(--hd-query-text, #666);
+  border: 1px solid var(--hd-query-border, #000);
 }
 
 .badge-response {
   background: var(--response-color);
+  color: var(--hd-response-text, #666);
+  border: 1px solid var(--hd-response-border, #000);
 }
 
 .heading-link {
   flex: 1;
   font-size: 12px;
-  color: #a8c7fa;
+  color: var(--hd-h1-link-text, #a8c7fa);
   text-decoration: none;
   cursor: pointer;
   word-break: break-word;
   line-height: 1.4;
+}
+
+/* 各レベルの見出しリンク色 */
+.tree-row[data-level="1"] .heading-link {
+  color: var(--hd-h1-link-text, #a8c7fa);
+}
+
+.tree-row[data-level="2"] .heading-link {
+  color: var(--hd-h2-link-text, #a8c7fa);
+}
+
+.tree-row[data-level="3"] .heading-link {
+  color: var(--hd-h3-link-text, #a8c7fa);
+}
+
+.tree-row[data-level="4"] .heading-link {
+  color: var(--hd-h4-link-text, #a8c7fa);
+}
+
+.tree-row[data-level="5"] .heading-link {
+  color: var(--hd-h5-link-text, #a8c7fa);
+}
+
+.tree-row[data-level="6"] .heading-link {
+  color: var(--hd-h6-link-text, #a8c7fa);
+}
+
+.tree-row[data-level="query"] .heading-link {
+  color: var(--hd-query-link-text, #a8c7fa);
+}
+
+.tree-row[data-level="response"] .heading-link {
+  color: var(--hd-response-link-text, #a8c7fa);
 }
 
 .heading-link:hover {

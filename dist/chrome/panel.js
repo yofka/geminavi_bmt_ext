@@ -41,6 +41,7 @@
                 <div id="hd-panel" class="hd-panel">
                     <div class="hd-panel-header" id="hd-panel-header">
                         <div class="hd-header-actions">
+                            <button class="hd-btn-action" id="hd-settings" title="色設定">⚙️</button>
                             <button class="hd-btn-dock" id="hd-dock-left" title="左にドッキング">⇦</button>
                             <button class="hd-btn-dock" id="hd-dock-right" title="右にドッキング">⇨</button>
                             <button class="hd-btn-close" id="hd-close" title="閉じる">✕</button>
@@ -320,7 +321,7 @@
                     flex-shrink: 0;
                     width: 14px;
                     font-size: 10px;
-                    color: #aaa;
+                    color: var(--hd-toggle-btn, #888);
                     cursor: pointer;
                     user-select: none;
                     margin-top: 2px;
@@ -338,20 +339,20 @@
                     font-weight: 600;
                 }
                 .hd-level-badge.main-pane {
-                    box-shadow: 0 0 0 2px rgba(100, 255, 100, 0.5);
+                    box-shadow: 0 0 0 2px var(--hd-main-pane-indicator, #fff);
                 }
-                .hd-badge-h1 { background: rgba(255, 107, 107, 0.8); }
-                .hd-badge-h2 { background: rgba(255, 159, 67, 0.8); }
-                .hd-badge-h3 { background: rgba(255, 220, 0, 0.8); }
-                .hd-badge-h4 { background: rgba(72, 219, 251, 0.8); }
-                .hd-badge-h5 { background: rgba(162, 155, 254, 0.8); }
-                .hd-badge-h6 { background: rgba(200, 200, 200, 0.8); }
-                .hd-badge-query { background: rgba(100, 200, 255, 0.8); }
-                .hd-badge-response { background: rgba(180, 130, 255, 0.8); }
+                .hd-badge-h1 { background: var(--hd-h1-bg, #000); color: var(--hd-h1-text, #666); border: 1px solid var(--hd-h1-border, #000); }
+                .hd-badge-h2 { background: var(--hd-h2-bg, #000); color: var(--hd-h2-text, #666); border: 1px solid var(--hd-h2-border, #000); }
+                .hd-badge-h3 { background: var(--hd-h3-bg, #000); color: var(--hd-h3-text, #666); border: 1px solid var(--hd-h3-border, #000); }
+                .hd-badge-h4 { background: var(--hd-h4-bg, #000); color: var(--hd-h4-text, #666); border: 1px solid var(--hd-h4-border, #000); }
+                .hd-badge-h5 { background: var(--hd-h5-bg, #000); color: var(--hd-h5-text, #666); border: 1px solid var(--hd-h5-border, #000); }
+                .hd-badge-h6 { background: var(--hd-h6-bg, #000); color: var(--hd-h6-text, #666); border: 1px solid var(--hd-h6-border, #000); }
+                .hd-badge-query { background: var(--hd-query-bg, #000); color: var(--hd-query-text, #666); border: 1px solid var(--hd-query-border, #000); }
+                .hd-badge-response { background: var(--hd-response-bg, #000); color: var(--hd-response-text, #666); border: 1px solid var(--hd-response-border, #000); }
                 .hd-heading-link {
                     flex: 1;
                     font-size: 12px;
-                    color: #a8c7fa;
+                    color: var(--hd-h1-link-text, #a8c7fa);
                     text-decoration: none;
                     cursor: pointer;
                     word-break: break-word;
@@ -365,6 +366,15 @@
                     overflow: hidden;
                     text-overflow: ellipsis;
                 }
+                /* 各レベルの見出しリンク色 */
+                .hd-tree-row[data-level="1"] .hd-heading-link { color: var(--hd-h1-link-text, #a8c7fa); }
+                .hd-tree-row[data-level="2"] .hd-heading-link { color: var(--hd-h2-link-text, #a8c7fa); }
+                .hd-tree-row[data-level="3"] .hd-heading-link { color: var(--hd-h3-link-text, #a8c7fa); }
+                .hd-tree-row[data-level="4"] .hd-heading-link { color: var(--hd-h4-link-text, #a8c7fa); }
+                .hd-tree-row[data-level="5"] .hd-heading-link { color: var(--hd-h5-link-text, #a8c7fa); }
+                .hd-tree-row[data-level="6"] .hd-heading-link { color: var(--hd-h6-link-text, #a8c7fa); }
+                .hd-tree-row[data-level="query"] .hd-heading-link { color: var(--hd-query-link-text, #a8c7fa); }
+                .hd-tree-row[data-level="response"] .hd-heading-link { color: var(--hd-response-link-text, #a8c7fa); }
                 .hd-footer {
                     margin-top: 8px;
                     padding-top: 8px;
@@ -585,6 +595,15 @@
             });
             document.getElementById('hd-dock-right').addEventListener('click', function () {
                 self.dock('right');
+            });
+
+            // 設定ボタン
+            document.getElementById('hd-settings').addEventListener('click', function () {
+                if (window.HDSettings) {
+                    window.HDSettings.loadColors().then(function () {
+                        window.HDSettings.open();
+                    });
+                }
             });
 
             // 展開レベルボタン
@@ -913,10 +932,13 @@
                     (node.searchMatch ? ' search-match' : '') +
                     (node.hasMatchingDescendant ? ' has-match' : '');
 
+                // レベルを data 属性として設定（CSS セレクタ用）
+                const levelKey = h.isQuery ? 'query' : h.isResponse ? 'response' : Math.floor(h.level);
+
                 const linkClass = 'hd-heading-link' + (self.wrapText ? '' : ' no-wrap');
 
                 html += '<li class="hd-tree-item">';
-                html += '<div class="' + rowClass + '">';
+                html += '<div class="' + rowClass + '" data-level="' + levelKey + '">';
                 html += '<span class="hd-toggle ' + (hasChildren ? '' : 'no-children') + '">' +
                     (hasChildren ? (shouldExpand ? '▼' : '▶') : '') + '</span>';
                 html += '<span class="' + badgeClass + '">' + badgeText + '</span>';

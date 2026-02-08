@@ -63,6 +63,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                 updateExpandBtns();
                 updateWrapBtn();
                 updateModeToggle();
+                // 色設定を適用
+                if (window.HDSettings) {
+                    if (config.colors) {
+                        window.HDSettings.colors = { ...window.HDSettings.getDefaultColors(), ...config.colors };
+                    }
+                    window.HDSettings.applyColors();
+                }
             }
         } catch (error) {
             console.error('Failed to load config:', error);
@@ -118,6 +125,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         currentMode = newMode;
         updateModeToggle();
     });
+
+    // 設定ボタン
+    const settingsBtn = document.getElementById('settingsBtn');
+    if (settingsBtn && window.HDSettings) {
+        settingsBtn.addEventListener('click', () => {
+            window.HDSettings.open(() => {
+                // 色が変更されたときにUIを更新
+            });
+        });
+    }
 
     // 検索機能
     searchInput.addEventListener('input', () => {

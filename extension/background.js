@@ -7,7 +7,8 @@
 const DEFAULT_CONFIG = {
     displayMode: 'sidepanel', // 'popup' or 'sidepanel'
     expandLevel: 2.5,
-    wrap: false
+    wrap: false,
+    colors: null // カスタム色設定（nullの場合はデフォルトを使用）
 };
 
 // API名前空間の抽象化（Firefox/Chrome両対応）
@@ -16,11 +17,12 @@ const api = typeof browser !== 'undefined' ? browser : chrome;
 // 設定を読み込む
 async function getConfig() {
     try {
-        const result = await api.storage.local.get(['displayMode', 'expandLevel', 'wrap']);
+        const result = await api.storage.local.get(['displayMode', 'expandLevel', 'wrap', 'colors']);
         return {
             displayMode: result.displayMode || DEFAULT_CONFIG.displayMode,
             expandLevel: result.expandLevel !== undefined ? result.expandLevel : DEFAULT_CONFIG.expandLevel,
-            wrap: result.wrap !== undefined ? result.wrap : DEFAULT_CONFIG.wrap
+            wrap: result.wrap !== undefined ? result.wrap : DEFAULT_CONFIG.wrap,
+            colors: result.colors || DEFAULT_CONFIG.colors
         };
     } catch (error) {
         console.error('Failed to load config:', error);
@@ -104,6 +106,14 @@ api.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'saveWrap') {
         (async () => {
             await saveConfig({ wrap: request.wrap });
+            sendResponse({ success: true });
+        })();
+        return true;
+    }
+
+    if (request.action === 'saveColors') {
+        (async () => {
+            await saveConfig({ colors: request.colors });
             sendResponse({ success: true });
         })();
         return true;
