@@ -264,6 +264,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         try {
             const [tab] = await api.tabs.query({ active: true, currentWindow: true });
 
+            if (!tab || !tab.id) {
+                console.log('No active tab found');
+                showToast('アクティブなタブが見つかりません', 'error');
+                return;
+            }
+
             // 特殊なページ（chrome://, about:, etc.）はスキップ
             // 注意: サイドパネルでは activeTab 権限がないため tab.url が undefined の場合がある
             // その場合は URL チェックをスキップして処理を続行する
@@ -279,19 +285,19 @@ document.addEventListener('DOMContentLoaded', async () => {
                         target: { tabId: tab.id },
                         files: ['heading-detector-core.js', 'content.js']
                     });
-                    // スクリプト注入後、十分な待機時間を確保
-                    await new Promise(resolve => setTimeout(resolve, 150));
+                    // スクリプト注入後、初回は長めに待機（サイドパネル最初起動時用）
+                    await new Promise(resolve => setTimeout(resolve, 300));
                 } catch (e) {
                     // 既に注入済みの場合はエラーになるが問題ない
                     console.log('Script injection note:', e.message);
                 }
             } else {
                 // Firefox の場合: content_scripts が自動注入されるまで待機
-                await new Promise(resolve => setTimeout(resolve, 300));
+                await new Promise(resolve => setTimeout(resolve, 500));
             }
 
             // まず ping でコンテンツスクリプトの準備を確認
-            const maxPingAttempts = 10;
+            const maxPingAttempts = 15;  // 増加
             let contentScriptReady = false;
 
             for (let attempt = 0; attempt < maxPingAttempts; attempt++) {
@@ -304,8 +310,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                     }
                 } catch (e) {
                     console.log(`Ping attempt ${attempt + 1}/${maxPingAttempts} failed:`, e.message);
-                    // 指数バックオフ: 100, 200, 300, ... 1000ms
-                    await new Promise(resolve => setTimeout(resolve, 100 * (attempt + 1)));
+                    // 指数バックオフ: 150, 200, 250, ... ms （サイドパネル用に増加）
+                    await new Promise(resolve => setTimeout(resolve, 150 + 50 * attempt));
                 }
             }
 

@@ -5,7 +5,7 @@
  * 見出しらしい要素を特定するライブラリ
  */
 
-(function(global) {
+(function (global) {
   'use strict';
 
   const HeadingDetector = {
@@ -38,152 +38,171 @@
 
     // メインコンテンツペインの検出（幅が最も広いスクロール可能ペイン）
     detectMainPane: function () {
-        const hostname = window.location.hostname;
+      const hostname = window.location.hostname;
 
-        // すべてのスクロール可能要素を収集
-        const allScrollables = Array.from(document.querySelectorAll('*')).filter(function (el) {
-            const style = window.getComputedStyle(el);
-            const isScrollable = (style.overflowY === 'auto' || style.overflowY === 'scroll');
-            const hasScroll = el.scrollHeight > el.clientHeight + 50;
-            const isVisible = el.offsetParent !== null || el === document.body;
-            return isScrollable && hasScroll && isVisible;
-        });
+      // すべてのスクロール可能要素を収集
+      const allScrollables = Array.from(document.querySelectorAll('*')).filter(function (el) {
+        const style = window.getComputedStyle(el);
+        const isScrollable = (style.overflowY === 'auto' || style.overflowY === 'scroll');
+        const hasScroll = el.scrollHeight > el.clientHeight + 50;
+        const isVisible = el.offsetParent !== null || el === document.body;
+        return isScrollable && hasScroll && isVisible;
+      });
 
-        // 幅でソート（最も広いものを優先）
-        allScrollables.sort(function (a, b) {
-            return b.clientWidth - a.clientWidth;
-        });
+      // 幅でソート（最も広いものを優先）
+      allScrollables.sort(function (a, b) {
+        return b.clientWidth - a.clientWidth;
+      });
 
-        // 幅が画面の40%以上のものを優先
-        const mainCandidates = allScrollables.filter(function (el) {
-            return el.clientWidth > window.innerWidth * 0.4;
-        });
+      // 幅が画面の40%以上のものを優先
+      const mainCandidates = allScrollables.filter(function (el) {
+        return el.clientWidth > window.innerWidth * 0.4;
+      });
 
-        if (mainCandidates.length > 0) {
-            return mainCandidates[0];
-        }
+      if (mainCandidates.length > 0) {
+        return mainCandidates[0];
+      }
 
-        // フォールバック: 一般的なセレクタ
-        if (hostname.includes('gemini.google.com')) {
-            return document.querySelector('main[role="main"]') || allScrollables[0] || null;
-        }
-        if (hostname.includes('notebooklm.google.com')) {
-            return document.querySelector('main, [role="main"]') || allScrollables[0] || null;
-        }
+      // フォールバック: 一般的なセレクタ
+      if (hostname.includes('gemini.google.com')) {
+        return document.querySelector('main[role="main"]') || allScrollables[0] || null;
+      }
+      if (hostname.includes('notebooklm.google.com')) {
+        return document.querySelector('main, [role="main"]') || allScrollables[0] || null;
+      }
 
-        return document.querySelector('main, [role="main"], article') || allScrollables[0] || null;
+      return document.querySelector('main, [role="main"], article') || allScrollables[0] || null;
     },
 
     // 要素がメインペイン内にあるかチェック
     isInMainPane: function (element) {
-        if (!this.mainPane) return false;
-        return this.mainPane.contains(element);
+      if (!this.mainPane) return false;
+      return this.mainPane.contains(element);
     },
 
     // Geminiのチャット要素を検出
     detectGeminiChatItems: function () {
-        const items = [];
-        const hostname = window.location.hostname;
+      const items = [];
+      const hostname = window.location.hostname;
 
-        if (!hostname.includes('gemini.google.com')) return items;
+      if (!hostname.includes('gemini.google.com')) return items;
 
-        // ユーザーのクエリ（H2タグ）を検出
-        const queryHeadings = document.querySelectorAll('h2');
-        queryHeadings.forEach((h2) => {
-            if (this.mainPane && !this.mainPane.contains(h2)) return;
-            // 回答コンテナ内のH2は除外（回答内見出しとして別途処理）
-            if (h2.closest('[data-message-author-role="model"]') ||
-                h2.closest('.model-response') ||
-                h2.closest('[class*="model-response"]')) return;
+      const processedTexts = new Set();  // テキストで重複チェック
 
-            const text = h2.textContent.trim();
-            if (text && text.length > 2) {
-                items.push({
-                    element: h2,
-                    text: text.substring(0, 100),
-                    level: 2,
-                    isQuery: true,
-                    isResponse: false,
-                    isNative: true,
-                    isInMainPane: true
-                });
-            }
+      // ユーザーのクエリ（H2タグ）を検出 - シンプルに H2 のみ
+      const queryHeadings = document.querySelectorAll('h2');
+      queryHeadings.forEach((h2) => {
+        if (this.mainPane && !this.mainPane.contains(h2)) return;
+        // 回答コンテナ内のH2は除外（回答内見出しとして別途処理）
+        if (h2.closest('[data-message-author-role="model"]') ||
+          h2.closest('.model-response') ||
+          h2.closest('[class*="model-response"]')) return;
+
+        const text = h2.textContent.trim();
+        if (!text || text.length < 2) return;
+
+        // テキストで重複チェック
+        if (processedTexts.has(text)) return;
+        processedTexts.add(text);
+
+        items.push({
+          element: h2,
+          text: text.substring(0, 100),
+          level: 2,
+          isQuery: true,
+          isResponse: false,
+          isNative: true,
+          isInMainPane: true
         });
+      });
 
-        // AIの回答（model-response）の冒頭部分を検出
-        const modelResponses = document.querySelectorAll('[data-message-author-role="model"], .model-response, [class*="model-response"]');
-        modelResponses.forEach((resp) => {
-            if (this.mainPane && !this.mainPane.contains(resp)) return;
+      // AIの回答（model-response）の冒頭部分を検出
+      const modelResponses = document.querySelectorAll('[data-message-author-role="model"], .model-response, [class*="model-response"]');
+      const processedResponses = new Set();
 
-            // 回答内の最初の段落またはテキストブロックを取得
-            let firstPara = resp.querySelector('p, .markdown-content > *:first-child, [class*="response-text"] > *:first-child');
-            if (!firstPara) {
-                // フォールバック: 直接のテキストノードを探す
-                const walker = document.createTreeWalker(resp, NodeFilter.SHOW_TEXT, null, false);
-                const firstText = walker.nextNode();
-                if (firstText && firstText.textContent.trim().length > 10) {
-                    firstPara = firstText.parentElement;
-                }
-            }
+      modelResponses.forEach((resp) => {
+        if (this.mainPane && !this.mainPane.contains(resp)) return;
 
-            if (firstPara) {
-                let text = firstPara.textContent.trim();
-                // 最初の一文を抽出（。や.で終わる最初の文）
-                const firstSentence = text.match(/^[^。.!?！？]+[。.!?！？]?/);
-                if (firstSentence) {
-                    text = firstSentence[0];
-                }
-                if (text.length > 100) {
-                    text = text.substring(0, 97) + '...';
-                }
+        // 既に処理済みの応答コンテナはスキップ（親子関係の重複防止）
+        let isChildOfProcessed = false;
+        processedResponses.forEach((pr) => {
+          if (pr.contains(resp) || resp.contains(pr)) isChildOfProcessed = true;
+        });
+        if (isChildOfProcessed) return;
+        processedResponses.add(resp);
 
-                if (text && text.length > 5) {
-                    items.push({
-                        element: firstPara,
-                        text: text,
-                        level: 2.5,  // H2とH3の間（応答内のH3〜H6がこの下にぶら下がる）
-                        isQuery: false,
-                        isResponse: true,
-                        isNative: false,
-                        isInMainPane: true
-                    });
-                }
-            }
+        // 回答内の最初の段落またはテキストブロックを取得
+        let firstPara = resp.querySelector('p, .markdown-content > *:first-child, [class*="response-text"] > *:first-child');
+        if (!firstPara) {
+          // フォールバック: 直接のテキストノードを探す
+          const walker = document.createTreeWalker(resp, NodeFilter.SHOW_TEXT, null, false);
+          const firstText = walker.nextNode();
+          if (firstText && firstText.textContent.trim().length > 10) {
+            firstPara = firstText.parentElement;
+          }
+        }
 
-            // 回答内のHタグも見出しとして抽出
-            // レベルを 2.5 + (元レベル/10) にして、必ず回答の子要素になるようにする
-            const responseHeadings = resp.querySelectorAll('h1, h2, h3, h4, h5, h6');
-            responseHeadings.forEach((h) => {
-                const text = h.textContent.trim();
-                const originalLvl = parseInt(h.tagName.charAt(1));
-                // H1→2.51, H2→2.52, H3→2.53... として回答(2.5)の子に配置
-                const effectiveLevel = 2.5 + (originalLvl / 10);
-                if (text && text.length > 2) {
-                    items.push({
-                        element: h,
-                        text: text.substring(0, 100),
-                        level: effectiveLevel,
-                        originalLevel: originalLvl,  // 表示用に元のレベルを保持
-                        isQuery: false,
-                        isResponse: false,
-                        isInsideResponse: true,  // 回答内フラグ
-                        isNative: true,
-                        isInMainPane: true
-                    });
-                }
+        if (firstPara) {
+          let text = firstPara.textContent.trim();
+          // 最初の一文を抽出（。や.で終わる最初の文）
+          const firstSentence = text.match(/^[^。.!?！？]+[。.!?！？]?/);
+          if (firstSentence) {
+            text = firstSentence[0];
+          }
+          if (text.length > 100) {
+            text = text.substring(0, 97) + '...';
+          }
+
+          if (text && text.length > 5 && !processedTexts.has(text)) {
+            processedTexts.add(text);
+            items.push({
+              element: firstPara,
+              text: text,
+              level: 2.5,  // H2とH3の間（応答内のH3〜H6がこの下にぶら下がる）
+              isQuery: false,
+              isResponse: true,
+              isNative: false,
+              isInMainPane: true
             });
-        });
+          }
+        }
 
-        return items;
+        // 回答内のHタグも見出しとして抽出
+        // レベルを 2.5 + (元レベル/10) にして、必ず回答の子要素になるようにする
+        const responseHeadings = resp.querySelectorAll('h1, h2, h3, h4, h5, h6');
+        responseHeadings.forEach((h) => {
+          const text = h.textContent.trim();
+          if (!text || text.length < 2) return;
+          if (processedTexts.has(text)) return;
+          processedTexts.add(text);
+
+          const originalLvl = parseInt(h.tagName.charAt(1));
+          // H1→2.51, H2→2.52, H3→2.53... として回答(2.5)の子に配置
+          const effectiveLevel = 2.5 + (originalLvl / 10);
+          items.push({
+            element: h,
+            text: text.substring(0, 100),
+            level: effectiveLevel,
+            originalLevel: originalLvl,  // 表示用に元のレベルを保持
+            isQuery: false,
+            isResponse: false,
+            isInsideResponse: true,  // 回答内フラグ
+            isNative: true,
+            isInMainPane: true
+          });
+        });
+      });
+
+      return items;
     },
 
     /**
      * ページの基準フォントサイズを取得
      */
-    getBaseFontSize: function() {
+    getBaseFontSize: function () {
       const body = document.body;
       if (!body) return 16;
-      
+
       const computed = window.getComputedStyle(body);
       const fontSize = parseFloat(computed.fontSize);
       return fontSize || 16;
@@ -192,7 +211,7 @@
     /**
      * 要素が見出し候補かどうかを判定
      */
-    isHeadingCandidate: function(element, baseFontSize) {
+    isHeadingCandidate: function (element, baseFontSize) {
       // 非表示要素をスキップ
       if (element.offsetParent === null && element.tagName !== 'BODY') {
         return null;
@@ -216,13 +235,13 @@
 
       // フォントサイズが基準より大きいか
       const isBigger = fontSize >= baseFontSize * this.config.fontSizeRatio;
-      
+
       // 太字かどうか
       const isBold = fontWeight >= this.config.boldThreshold;
 
       // ブロック要素かどうか
       const isBlock = ['block', 'flex', 'grid', 'list-item'].includes(display) ||
-                      display.startsWith('table');
+        display.startsWith('table');
 
       // スコア計算
       let score = 0;
@@ -253,7 +272,7 @@
       const marginBottom = parseFloat(style.marginBottom) || 0;
       const paddingTop = parseFloat(style.paddingTop) || 0;
       const paddingBottom = parseFloat(style.paddingBottom) || 0;
-      
+
       if (marginTop > 10 || paddingTop > 10) score += 10;
       if (marginBottom > 5 || paddingBottom > 5) score += 5;
 
@@ -286,46 +305,46 @@
      * ページのスクロールコンテナを特定
      */
     getScrollContainer: function () {
-        if (this.mainPane && this.mainPane.scrollHeight > this.mainPane.clientHeight) {
-            return this.mainPane;
-        }
-        return window;
+      if (this.mainPane && this.mainPane.scrollHeight > this.mainPane.clientHeight) {
+        return this.mainPane;
+      }
+      return window;
     },
 
     /**
      * ページを特定の見出し要素までスクロール
      */
     scrollToHeading: function (targetEl) {
-        const container = this.getScrollContainer();
-        const isWindow = (container === window);
-        const currentScroll = isWindow ? window.scrollY : container.scrollTop;
-        const rect = targetEl.getBoundingClientRect();
-        const containerTop = isWindow ? 0 : container.getBoundingClientRect().top;
-        const targetTopRel = currentScroll + rect.top - containerTop;
-        // 見出しを画面上部に表示（20pxのマージン）
-        const targetScrollPos = targetTopRel - 20;
+      const container = this.getScrollContainer();
+      const isWindow = (container === window);
+      const currentScroll = isWindow ? window.scrollY : container.scrollTop;
+      const rect = targetEl.getBoundingClientRect();
+      const containerTop = isWindow ? 0 : container.getBoundingClientRect().top;
+      const targetTopRel = currentScroll + rect.top - containerTop;
+      // 見出しを画面上部に表示（20pxのマージン）
+      const targetScrollPos = targetTopRel - 20;
 
-        if (isWindow) window.scrollTo({ top: targetScrollPos, behavior: 'smooth' });
-        else container.scrollTo({ top: targetScrollPos, behavior: 'smooth' });
+      if (isWindow) window.scrollTo({ top: targetScrollPos, behavior: 'smooth' });
+      else container.scrollTo({ top: targetScrollPos, behavior: 'smooth' });
 
-        // Highlight using the core HeadingDetector's highlight function
-        this.highlight([{ element: targetEl }]);
+      // Highlight using the core HeadingDetector's highlight function
+      this.highlight([{ element: targetEl }]);
     },
 
     /**
      * 重複を除去（親子関係にある要素）
      */
-    removeDuplicates: function(headings) {
+    removeDuplicates: function (headings) {
       const result = [];
       const elements = headings.map(h => h.element);
 
       for (const heading of headings) {
         let isDuplicate = false;
-        
+
         // この要素が他の要素の親または子かチェック
         for (const other of elements) {
           if (heading.element === other) continue;
-          
+
           if (heading.element.contains(other) || other.contains(heading.element)) {
             // より具体的な（内側の）要素を優先、またはスコアが高い方
             const otherHeading = headings.find(h => h.element === other);
@@ -335,7 +354,7 @@
             }
           }
         }
-        
+
         if (!isDuplicate) {
           result.push(heading);
         }
@@ -347,96 +366,96 @@
     /**
      * メイン検出関数
      */
-    detect: function(options = {}) {
+    detect: function (options = {}) {
       const config = { ...this.config, ...options };
       this.mainPane = this.detectMainPane(); // Set mainPane for the current detection run
       const baseFontSize = this.getBaseFontSize();
-      
+
       const allHeadings = [];
       const addedElements = new Set();
       const hostname = window.location.hostname;
 
       // Gemini専用のチャット検出
       if (hostname.includes('gemini.google.com')) {
-          const chatItems = this.detectGeminiChatItems();
-          chatItems.forEach((item) => {
-              if (!addedElements.has(item.element)) {
-                  addedElements.add(item.element);
-                  allHeadings.push(item);
-              }
-          });
+        const chatItems = this.detectGeminiChatItems();
+        chatItems.forEach((item) => {
+          if (!addedElements.has(item.element)) {
+            addedElements.add(item.element);
+            allHeadings.push(item);
+          }
+        });
       }
 
       // ネイティブ見出し（H1-H6）を検出
       const nativeHeadings = document.querySelectorAll('h1, h2, h3, h4, h5, h6, [role="heading"]');
       nativeHeadings.forEach((h) => {
-          if (addedElements.has(h)) return; // 既に追加済みならスキップ
+        if (addedElements.has(h)) return; // 既に追加済みならスキップ
 
-          const text = h.textContent.trim();
-          if (!text || text.length < 2) return;
+        const text = h.textContent.trim();
+        if (!text || text.length < 2) return;
 
-          const lvl = h.tagName.match(/^H([1-6])$/) ? parseInt(h.tagName.charAt(1)) : (parseInt(h.getAttribute('aria-level')) || 3);
-          const inMain = this.isInMainPane(h);
+        const lvl = h.tagName.match(/^H([1-6])$/) ? parseInt(h.tagName.charAt(1)) : (parseInt(h.getAttribute('aria-level')) || 3);
+        const inMain = this.isInMainPane(h);
 
-          addedElements.add(h);
-          allHeadings.push({
-              element: h,
-              text: text.substring(0, 100),
-              level: lvl,
-              score: 100,
-              isNative: true,
-              isQuery: false,
-              isResponse: false,
-              isInMainPane: inMain
-          });
+        addedElements.add(h);
+        allHeadings.push({
+          element: h,
+          text: text.substring(0, 100),
+          level: lvl,
+          score: 100,
+          isNative: true,
+          isQuery: false,
+          isResponse: false,
+          isInMainPane: inMain
+        });
       });
 
       // スタイル解析による見出し検出（Gemini以外、またはメインペインがない場合）
       // またはGeminiページでも、メインペイン外の一般見出しを拾う
       if (!hostname.includes('gemini.google.com') || !this.mainPane) { // この条件は少し調整が必要かもしれません。
-          const selectors = 'p, div, span, li, strong, b, em, article, section, header, footer, main, aside, nav, label';
-          const elements = document.querySelectorAll(selectors);
+        const selectors = 'p, div, span, li, strong, b, em, article, section, header, footer, main, aside, nav, label';
+        const elements = document.querySelectorAll(selectors);
 
-          const candidates = [];
-          elements.forEach((el) => {
-              if (addedElements.has(el)) return;
+        const candidates = [];
+        elements.forEach((el) => {
+          if (addedElements.has(el)) return;
 
-              // 見出しタグ内の要素はスキップ
-              let insideHeading = false;
-              nativeHeadings.forEach((h) => {
-                  if (h.contains(el)) insideHeading = true;
-              });
-              if (insideHeading) return;
-
-              const result = this.isHeadingCandidate(el, baseFontSize);
-              if (result) {
-                  result.isInMainPane = this.isInMainPane(el); // isInMainPaneを正しく設定
-                  candidates.push(result);
-              }
+          // 見出しタグ内の要素はスキップ
+          let insideHeading = false;
+          nativeHeadings.forEach((h) => {
+            if (h.contains(el)) insideHeading = true;
           });
+          if (insideHeading) return;
 
-          // スコア順にソート
-          candidates.sort((a, b) => b.score - a.score);
+          const result = this.isHeadingCandidate(el, baseFontSize);
+          if (result) {
+            result.isInMainPane = this.isInMainPane(el); // isInMainPaneを正しく設定
+            candidates.push(result);
+          }
+        });
 
-          // 重複削除して追加
-          candidates.forEach((c) => {
-              let isDup = false;
-              addedElements.forEach((added) => {
-                  if (added.contains(c.element) || c.element.contains(added)) {
-                      isDup = true;
-                  }
-              });
-              if (!isDup) {
-                  addedElements.add(c.element);
-                  allHeadings.push(c);
-              }
+        // スコア順にソート
+        candidates.sort((a, b) => b.score - a.score);
+
+        // 重複削除して追加
+        candidates.forEach((c) => {
+          let isDup = false;
+          addedElements.forEach((added) => {
+            if (added.contains(c.element) || c.element.contains(added)) {
+              isDup = true;
+            }
           });
+          if (!isDup) {
+            addedElements.add(c.element);
+            allHeadings.push(c);
+          }
+        });
       }
 
       // DOMの出現順にソート
       allHeadings.sort((a, b) => {
-          const pos = a.element.compareDocumentPosition(b.element);
-          return pos & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1;
+        const pos = a.element.compareDocumentPosition(b.element);
+        return pos & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1;
       });
 
       // 最大検出数で切り詰める
@@ -448,7 +467,7 @@
     /**
      * 検出した見出しをハイライト表示
      */
-    highlight: function(headings) {
+    highlight: function (headings) {
       // 既存のハイライトを削除
       this.clearHighlight();
 
@@ -459,7 +478,7 @@
         if (heading.isResponse) colorKey = 'response';
 
         const color = this.config.highlightColors[colorKey] || this.config.highlightColors.h6;
-        
+
         el.style.outline = '2px solid ' + color.replace('0.3', '0.8');
         el.style.backgroundColor = color;
         el.dataset.headingDetected = 'true';
@@ -470,7 +489,7 @@
     /**
      * ハイライトをクリア
      */
-    clearHighlight: function() {
+    clearHighlight: function () {
       const highlighted = document.querySelectorAll('[data-heading-detected="true"]');
       for (const el of highlighted) {
         el.style.outline = '';
@@ -483,10 +502,10 @@
     /**
      * 結果をコンソールに出力
      */
-    logResults: function(headings) {
+    logResults: function (headings) {
       console.group('🔍 Heading Detector - 検出結果');
       console.log(`検出数: ${headings.length}`);
-      
+
       for (let i = 0; i < headings.length; i++) {
         const h = headings[i];
         const prefix = h.isNative ? '📌' : '✨';
@@ -496,14 +515,14 @@
           h.element
         );
       }
-      
+
       console.groupEnd();
     },
 
     /**
      * 全機能を実行
      */
-    run: function(options = {}) {
+    run: function (options = {}) {
       const headings = this.detect(options);
       this.highlight(headings);
       this.logResults(headings);
