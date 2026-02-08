@@ -89,16 +89,34 @@
 
       const processedTexts = new Set();  // テキストで重複チェック
 
-      // ユーザーのクエリ（H2タグ）を検出 - シンプルに H2 のみ
-      const queryHeadings = document.querySelectorAll('h2');
-      queryHeadings.forEach((h2) => {
-        if (this.mainPane && !this.mainPane.contains(h2)) return;
-        // 回答コンテナ内のH2は除外（回答内見出しとして別途処理）
-        if (h2.closest('[data-message-author-role="model"]') ||
-          h2.closest('.model-response') ||
-          h2.closest('[class*="model-response"]')) return;
+      // Shadow DOM 内も含めて要素を検索する関数
+      const querySelectorAllDeep = (selector, root = document) => {
+        const results = [...root.querySelectorAll(selector)];
+        // Shadow DOM を持つ要素を探す
+        root.querySelectorAll('*').forEach(el => {
+          if (el.shadowRoot) {
+            results.push(...querySelectorAllDeep(selector, el.shadowRoot));
+          }
+        });
+        return results;
+      };
 
+      // ユーザーのクエリを検出 - H2タグまたは role="heading" aria-level="2" の要素
+      const queryHeadings = querySelectorAllDeep('h2, [role="heading"][aria-level="2"]');
+
+      queryHeadings.forEach((h2) => {
         const text = h2.textContent.trim();
+        const inMainPane = this.mainPane ? this.mainPane.contains(h2) : true;
+        const inModelResponse = h2.closest('[data-message-author-role="model"]') ||
+          h2.closest('.model-response') ||
+          h2.closest('[class*="model-response"]');
+
+
+
+        if (this.mainPane && !inMainPane) return;
+        // 回答コンテナ内のH2は除外（回答内見出しとして別途処理）
+        if (inModelResponse) return;
+
         if (!text || text.length < 2) return;
 
         // テキストで重複チェック

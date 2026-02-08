@@ -119,6 +119,14 @@ api.runtime.onMessage.addListener((request, sender, sendResponse) => {
         return true;
     }
 
+    if (request.action === 'saveHBadgeEnabled') {
+        (async () => {
+            await saveConfig({ hBadgeEnabled: request.enabled });
+            sendResponse({ success: true });
+        })();
+        return true;
+    }
+
     // インページパネルのトグル
     if (request.action === 'togglePanel') {
         (async () => {

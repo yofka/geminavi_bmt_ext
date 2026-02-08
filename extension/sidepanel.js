@@ -24,7 +24,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     let searchQuery = '';
     let expandLevel = 2.5;
     let wrapEnabled = false;
+    let hBadgeEnabled = false; // Hバッジ表示のデフォルトはオフ
     let currentMode = 'sidepanel';
+
+    // Hバッジトグル
+    const hBadgeToggle = document.getElementById('hBadgeToggle');
 
     // 自動更新機能
     let autoRefreshEnabled = true;
@@ -60,8 +64,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                 expandLevel = config.expandLevel !== undefined ? config.expandLevel : 2.5;
                 currentMode = config.displayMode || 'sidepanel';
                 wrapEnabled = config.wrap || false;
+                hBadgeEnabled = config.hBadgeEnabled || false;
                 updateExpandBtns();
                 updateWrapBtn();
+                updateHBadgeToggle();
                 updateModeToggle();
                 // 色設定を適用
                 if (window.HDSettings) {
@@ -74,6 +80,22 @@ document.addEventListener('DOMContentLoaded', async () => {
         } catch (error) {
             console.error('Failed to load config:', error);
         }
+    }
+
+    // Hバッジトグルを更新
+    function updateHBadgeToggle() {
+        if (hBadgeToggle) {
+            hBadgeToggle.checked = hBadgeEnabled;
+        }
+    }
+
+    // Hバッジトグルイベント
+    if (hBadgeToggle) {
+        hBadgeToggle.addEventListener('change', async () => {
+            hBadgeEnabled = hBadgeToggle.checked;
+            renderHeadings(currentHeadings);
+            await api.runtime.sendMessage({ action: 'saveHBadgeEnabled', enabled: hBadgeEnabled });
+        });
     }
 
     // 展開レベルボタンをレンダリング
@@ -392,20 +414,36 @@ document.addEventListener('DOMContentLoaded', async () => {
         return hasMatch;
     }
 
-    // バッジテキストを取得
-    function getBadgeText(heading) {
-        if (heading.isQuery) return '💬Q';
-        if (heading.isResponse) return '💭A';
+    // バッジ情報を取得（複数バッジ対応）
+    function getBadges(heading) {
+        const badges = [];
         const displayLevel = heading.originalLevel || Math.floor(heading.level);
-        return (heading.isNative ? '' : '✨') + 'H' + displayLevel;
-    }
 
-    // バッジクラスを取得
-    function getBadgeClass(heading) {
-        if (heading.isQuery) return 'badge-query';
-        if (heading.isResponse) return 'badge-response';
-        const displayLevel = heading.originalLevel || Math.floor(heading.level);
-        return 'badge-h' + displayLevel;
+        // Hバッジ（hBadgeEnabled時のみ表示）
+        if (hBadgeEnabled && displayLevel >= 1 && displayLevel <= 6) {
+            badges.push({
+                text: (heading.isNative ? '' : '✨') + 'H' + displayLevel,
+                className: 'badge-h' + displayLevel
+            });
+        }
+
+        // Q/Aバッジ
+        if (heading.isQuery) {
+            badges.push({ text: '💬Q', className: 'badge-query' });
+        }
+        if (heading.isResponse) {
+            badges.push({ text: '💭A', className: 'badge-response' });
+        }
+
+        // Hバッジオフかつ非Q/A の場合はHバッジのみ表示
+        if (badges.length === 0 && displayLevel >= 1 && displayLevel <= 6) {
+            badges.push({
+                text: (heading.isNative ? '' : '✨') + 'H' + displayLevel,
+                className: 'badge-h' + displayLevel
+            });
+        }
+
+        return badges;
     }
 
     // ノードがGemini会話内かどうか判定
@@ -460,11 +498,17 @@ document.addEventListener('DOMContentLoaded', async () => {
             toggle.textContent = hasChildren ? (isCollapsed ? '▶' : '▼') : '';
             if (!hasChildren) toggle.classList.add('no-children');
 
-            // レベルバッジ
-            const badge = document.createElement('span');
-            badge.className = 'level-badge ' + getBadgeClass(node.heading);
-            badge.textContent = getBadgeText(node.heading);
-            if (node.heading.isInMainPane) badge.classList.add('main-pane');
+            // レベルバッジ（複数対応）
+            const badges = getBadges(node.heading);
+            const badgeContainer = document.createElement('span');
+            badgeContainer.className = 'badge-container';
+            badges.forEach(b => {
+                const badge = document.createElement('span');
+                badge.className = 'level-badge ' + b.className;
+                badge.textContent = b.text;
+                if (node.heading.isInMainPane) badge.classList.add('main-pane');
+                badgeContainer.appendChild(badge);
+            });
 
             // リンク
             const link = document.createElement('a');
@@ -511,7 +555,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
 
             row.appendChild(toggle);
-            row.appendChild(badge);
+            row.appendChild(badgeContainer);
             row.appendChild(link);
             li.appendChild(row);
             if (childContainer) li.appendChild(childContainer);

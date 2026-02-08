@@ -1,5 +1,5 @@
 // Heading Detector Bookmarklet (Combined)
-// Generated: 2026-02-08T13:06:19.083Z
+// Generated: 2026-02-08T16:27:31.588Z
 
 /**
  * Heading Detector - スタイル解析による見出し検出
@@ -92,16 +92,34 @@
 
       const processedTexts = new Set();  // テキストで重複チェック
 
-      // ユーザーのクエリ（H2タグ）を検出 - シンプルに H2 のみ
-      const queryHeadings = document.querySelectorAll('h2');
-      queryHeadings.forEach((h2) => {
-        if (this.mainPane && !this.mainPane.contains(h2)) return;
-        // 回答コンテナ内のH2は除外（回答内見出しとして別途処理）
-        if (h2.closest('[data-message-author-role="model"]') ||
-          h2.closest('.model-response') ||
-          h2.closest('[class*="model-response"]')) return;
+      // Shadow DOM 内も含めて要素を検索する関数
+      const querySelectorAllDeep = (selector, root = document) => {
+        const results = [...root.querySelectorAll(selector)];
+        // Shadow DOM を持つ要素を探す
+        root.querySelectorAll('*').forEach(el => {
+          if (el.shadowRoot) {
+            results.push(...querySelectorAllDeep(selector, el.shadowRoot));
+          }
+        });
+        return results;
+      };
 
+      // ユーザーのクエリを検出 - H2タグまたは role="heading" aria-level="2" の要素
+      const queryHeadings = querySelectorAllDeep('h2, [role="heading"][aria-level="2"]');
+
+      queryHeadings.forEach((h2) => {
         const text = h2.textContent.trim();
+        const inMainPane = this.mainPane ? this.mainPane.contains(h2) : true;
+        const inModelResponse = h2.closest('[data-message-author-role="model"]') ||
+          h2.closest('.model-response') ||
+          h2.closest('[class*="model-response"]');
+
+
+
+        if (this.mainPane && !inMainPane) return;
+        // 回答コンテナ内のH2は除外（回答内見出しとして別途処理）
+        if (inModelResponse) return;
+
         if (!text || text.length < 2) return;
 
         // テキストで重複チェック
@@ -577,6 +595,7 @@
 
     const HDSettings = {
         colors: { ...DEFAULT_COLORS },
+        hBadgeDefault: false, // Hバッジ表示のデフォルト（オフ）
         dialog: null,
         isOpen: false,
         onChangeCallback: null,
@@ -617,6 +636,12 @@
                                         メインペーン枠
                                     </label>
                                     <input type="color" id="hd-color-mainPaneIndicator" value="${this.colors.mainPaneIndicator}">
+                                </div>
+                                <div class="hd-color-row">
+                                    <label>
+                                        <input type="checkbox" id="hd-hBadgeDefault" ${this.hBadgeDefault ? 'checked' : ''}>
+                                        Hバッジ表示（デフォルト）
+                                    </label>
                                 </div>
                             </div>
                             <div class="hd-settings-section">
@@ -910,6 +935,7 @@
             // リセットボタン
             document.getElementById('hd-settings-reset').addEventListener('click', () => {
                 self.colors = { ...DEFAULT_COLORS };
+                self.hBadgeDefault = false;
                 self.updateDialogInputs();
                 self.updatePreviews();
                 self.applyColors();
@@ -918,6 +944,7 @@
             // 保存ボタン
             document.getElementById('hd-settings-save').addEventListener('click', () => {
                 self.collectColors();
+                self.collectSettings();
                 self.saveColors();
                 self.close();
             });
@@ -932,6 +959,14 @@
             });
         },
 
+        // その他の設定を収集
+        collectSettings: function () {
+            const hBadgeCheckbox = document.getElementById('hd-hBadgeDefault');
+            if (hBadgeCheckbox) {
+                this.hBadgeDefault = hBadgeCheckbox.checked;
+            }
+        },
+
         // ダイアログの入力を更新
         updateDialogInputs: function () {
             Object.keys(this.colors).forEach(key => {
@@ -940,6 +975,11 @@
                     input.value = this.colors[key];
                 }
             });
+            // Hバッジチェックボックスも更新
+            const hBadgeCheckbox = document.getElementById('hd-hBadgeDefault');
+            if (hBadgeCheckbox) {
+                hBadgeCheckbox.checked = this.hBadgeDefault;
+            }
         },
 
         // 入力から色を収集
@@ -979,13 +1019,16 @@
             try {
                 if (api && api.runtime && api.runtime.sendMessage) {
                     await api.runtime.sendMessage({ action: 'saveColors', colors: this.colors });
+                    await api.runtime.sendMessage({ action: 'saveHBadgeEnabled', enabled: this.hBadgeDefault });
                 } else {
                     // ブックマークレット用: localStorage
                     localStorage.setItem('hdColors', JSON.stringify(this.colors));
+                    localStorage.setItem('hdHBadgeDefault', JSON.stringify(this.hBadgeDefault));
                 }
             } catch (e) {
                 // ブックマークレット用: localStorage
                 localStorage.setItem('hdColors', JSON.stringify(this.colors));
+                localStorage.setItem('hdHBadgeDefault', JSON.stringify(this.hBadgeDefault));
             }
         },
 
@@ -994,21 +1037,34 @@
             try {
                 if (api && api.runtime && api.runtime.sendMessage) {
                     const config = await api.runtime.sendMessage({ action: 'getConfig' });
-                    if (config && config.colors) {
-                        this.colors = { ...DEFAULT_COLORS, ...config.colors };
+                    if (config) {
+                        if (config.colors) {
+                            this.colors = { ...DEFAULT_COLORS, ...config.colors };
+                        }
+                        if (config.hBadgeEnabled !== undefined) {
+                            this.hBadgeDefault = config.hBadgeEnabled;
+                        }
                     }
                 } else {
                     // ブックマークレット用: localStorage
-                    const saved = localStorage.getItem('hdColors');
-                    if (saved) {
-                        this.colors = { ...DEFAULT_COLORS, ...JSON.parse(saved) };
+                    const savedColors = localStorage.getItem('hdColors');
+                    if (savedColors) {
+                        this.colors = { ...DEFAULT_COLORS, ...JSON.parse(savedColors) };
+                    }
+                    const savedHBadge = localStorage.getItem('hdHBadgeDefault');
+                    if (savedHBadge) {
+                        this.hBadgeDefault = JSON.parse(savedHBadge);
                     }
                 }
             } catch (e) {
                 // ブックマークレット用: localStorage
-                const saved = localStorage.getItem('hdColors');
-                if (saved) {
-                    this.colors = { ...DEFAULT_COLORS, ...JSON.parse(saved) };
+                const savedColors = localStorage.getItem('hdColors');
+                if (savedColors) {
+                    this.colors = { ...DEFAULT_COLORS, ...JSON.parse(savedColors) };
+                }
+                const savedHBadge = localStorage.getItem('hdHBadgeDefault');
+                if (savedHBadge) {
+                    this.hBadgeDefault = JSON.parse(savedHBadge);
                 }
             }
             this.applyColors();
