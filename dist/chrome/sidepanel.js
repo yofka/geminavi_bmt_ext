@@ -136,6 +136,26 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
+    // Color ボタン（本文の色分けトグル）
+    let highlightEnabled = true;
+    const colorBtn = document.getElementById('colorBtn');
+    if (colorBtn) {
+        colorBtn.addEventListener('click', async () => {
+            highlightEnabled = !highlightEnabled;
+            colorBtn.classList.toggle('active', highlightEnabled);
+            try {
+                const [tab] = await api.tabs.query({ active: true, currentWindow: true });
+                if (tab && tab.id) {
+                    await api.tabs.sendMessage(tab.id, {
+                        action: highlightEnabled ? 'enableHighlight' : 'disableHighlight'
+                    });
+                }
+            } catch (error) {
+                console.error('Highlight toggle error:', error);
+            }
+        });
+    }
+
     // 検索機能
     searchInput.addEventListener('input', () => {
         searchQuery = searchInput.value.trim().toLowerCase();

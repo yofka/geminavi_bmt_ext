@@ -32,6 +32,7 @@
       ],
       "js": [
         "heading-detector-core.js",
+        "settings-core.js",
         "content.js",
         "panel.js"
       ],

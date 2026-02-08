@@ -25,6 +25,7 @@
     <div class="button-row">
       <div id="expandBtns" class="expand-btns"></div>
       <button id="wrapBtn" class="btn btn-action">Wrap</button>
+      <button id="colorBtn" class="btn btn-action active" title="本文の色分け">Color</button>
       <button id="panelToggle" class="btn btn-action" title="インページパネルを表示">Panel</button>
       <button id="modeToggle" class="btn btn-action">Popup</button>
       <button id="settingsBtn" class="btn btn-action" title="色設定">⚙️</button>
@@ -33,6 +34,16 @@
     <div id="headingList" class="heading-list"></div>
 
     <footer class="footer">
+      <div class="auto-refresh-row">
+        <button id="manualRefresh" class="btn-refresh" title="手動更新">🔃</button>
+        <button id="autoToggle" class="btn btn-action active" title="DOM変更の自動追従">Auto</button>
+        <div class="delay-controls">
+          <button id="delayDown" class="btn-delay" title="遅延時間を減らす">−</button>
+          <span id="delayValue" class="delay-value">1.5s</span>
+          <button id="delayUp" class="btn-delay" title="遅延時間を増やす">+</button>
+        </div>
+        <span id="autoStatus" class="auto-status">Ready</span>
+      </div>
       <span class="legend">
         <span class="badge native">✨ ネイティブ</span>
         <span class="badge detected">✨ 検出</span>
@@ -44,7 +55,7 @@
 
   <div id="toast" class="toast"></div>
 
-  <script src="settings.js"></script>
+  <script src="settings-core.js"></script>
   <script src="popup.js"></script>
 </body>
 

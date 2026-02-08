@@ -107,11 +107,19 @@ javascript: (function () {
         config.dock = (config.dock === 'right') ? 'none' : 'right';
         updateContainerStyle();
     });
+    var btnSettings = createBtn('⚙️', '色設定', function () {
+        if (window.HDSettings) {
+            window.HDSettings.open(function () {
+                // 色変更時のコールバック
+            });
+        }
+    });
     var btnClose = createBtn('×', '閉じる', function () { container.remove(); });
 
     ctrlGroup.appendChild(btnWrap);
     ctrlGroup.appendChild(btnDockLeft);
     ctrlGroup.appendChild(btnDockRight);
+    ctrlGroup.appendChild(btnSettings);
     ctrlGroup.appendChild(btnClose);
     topRow.appendChild(titleSpan);
     topRow.appendChild(ctrlGroup);
@@ -179,6 +187,99 @@ javascript: (function () {
     var countRow = createEl('div', 'font-size:11px;color:' + THEME.btnText + ';',
         '🎯 メイン: ' + mainCount + ' 件  💬 Q: ' + queryCount + '  💭 A: ' + respCount + '  📌 全体: ' + headings.length + ' 件');
     header.appendChild(countRow);
+
+    // 自動更新行
+    var autoRefreshEnabled = true;
+    var autoRefreshDelay = 1500;
+    var autoRefreshInterval = null;
+    var pendingUpdate = false;
+
+    var footerRow = createEl('div', 'display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:6px;');
+    footerRow.onmousedown = function (e) { e.stopPropagation(); };
+
+    var btnRefresh = createBtn('🔃', '手動更新', function () {
+        HeadingDetector.detect();
+        headings = HeadingDetector.headings;
+        HeadingDetector.highlight(headings);
+        renderTree();
+        statusSpan.textContent = '更新: ' + new Date().toLocaleTimeString();
+    });
+
+    var btnAuto = createBtn('Auto', 'DOM変更の自動追従', function () {
+        autoRefreshEnabled = !autoRefreshEnabled;
+        if (autoRefreshEnabled) {
+            btnAuto.style.background = THEME.activeBtnBg;
+            btnAuto.style.color = THEME.activeBtnText;
+            btnAuto.classList.add('active');
+            startAutoRefresh();
+        } else {
+            btnAuto.style.background = 'transparent';
+            btnAuto.style.color = THEME.btnText;
+            btnAuto.classList.remove('active');
+            stopAutoRefresh();
+            statusSpan.textContent = '自動更新: OFF';
+        }
+    });
+    btnAuto.style.background = THEME.activeBtnBg;
+    btnAuto.style.color = THEME.activeBtnText;
+    btnAuto.classList.add('active');
+
+    var delayGroup = createEl('div', 'display:flex;align-items:center;gap:2px;');
+    var btnDelayDown = createBtn('−', '遅延時間を減らす', function () {
+        autoRefreshDelay = Math.max(500, autoRefreshDelay - 500);
+        delaySpan.textContent = (autoRefreshDelay / 1000).toFixed(1) + 's';
+    });
+    var delaySpan = createEl('span', 'font-size:11px;color:' + THEME.btnText + ';min-width:32px;text-align:center;', '1.5s');
+    var btnDelayUp = createBtn('+', '遅延時間を増やす', function () {
+        autoRefreshDelay = Math.min(5000, autoRefreshDelay + 500);
+        delaySpan.textContent = (autoRefreshDelay / 1000).toFixed(1) + 's';
+    });
+    delayGroup.appendChild(btnDelayDown);
+    delayGroup.appendChild(delaySpan);
+    delayGroup.appendChild(btnDelayUp);
+
+    var statusSpan = createEl('span', 'font-size:10px;color:' + THEME.btnText + ';', 'Ready');
+
+    footerRow.appendChild(btnRefresh);
+    footerRow.appendChild(btnAuto);
+    footerRow.appendChild(delayGroup);
+    footerRow.appendChild(statusSpan);
+    header.appendChild(footerRow);
+
+    function checkForChanges() {
+        var oldCount = headings.length;
+        HeadingDetector.detect();
+        var newCount = HeadingDetector.headings.length;
+        if (newCount !== oldCount) {
+            pendingUpdate = true;
+            setTimeout(function () {
+                if (pendingUpdate) {
+                    pendingUpdate = false;
+                    headings = HeadingDetector.headings;
+                    HeadingDetector.highlight(headings);
+                    renderTree();
+                    statusSpan.textContent = '更新: ' + new Date().toLocaleTimeString();
+                }
+            }, autoRefreshDelay);
+        }
+    }
+
+    function startAutoRefresh() {
+        if (autoRefreshInterval) return;
+        statusSpan.textContent = '自動更新: ON';
+        autoRefreshInterval = setInterval(checkForChanges, 2000);
+    }
+
+    function stopAutoRefresh() {
+        if (autoRefreshInterval) {
+            clearInterval(autoRefreshInterval);
+            autoRefreshInterval = null;
+        }
+        pendingUpdate = false;
+    }
+
+    // 自動更新を開始
+    startAutoRefresh();
 
     container.appendChild(header);
 

@@ -18,11 +18,25 @@ document.addEventListener('DOMContentLoaded', async () => {
     const headingList = document.getElementById('headingList');
     const toast = document.getElementById('toast');
 
+    // Auto-refresh 要素
+    const manualRefresh = document.getElementById('manualRefresh');
+    const autoToggle = document.getElementById('autoToggle');
+    const delayDown = document.getElementById('delayDown');
+    const delayUp = document.getElementById('delayUp');
+    const delayValue = document.getElementById('delayValue');
+    const autoStatus = document.getElementById('autoStatus');
+
     let currentHeadings = [];
     let searchQuery = '';
     let expandLevel = 2.5;
     let wrapEnabled = false;
     let currentMode = 'sidepanel';
+
+    // Auto-refresh 状態
+    let autoRefreshEnabled = true;
+    let autoRefreshDelay = 1500;
+    let autoRefreshInterval = null;
+    let pendingUpdate = false;
 
     // 展開レベルオプション
     const levelOptions = [1, 2, 2.5, 3, 4, 5, 6];
@@ -130,6 +144,26 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
+    // Color ボタン（本文の色分けトグル）
+    let highlightEnabled = true;
+    const colorBtn = document.getElementById('colorBtn');
+    if (colorBtn) {
+        colorBtn.addEventListener('click', async () => {
+            highlightEnabled = !highlightEnabled;
+            colorBtn.classList.toggle('active', highlightEnabled);
+            try {
+                const [tab] = await api.tabs.query({ active: true, currentWindow: true });
+                if (tab && tab.id) {
+                    await api.tabs.sendMessage(tab.id, {
+                        action: highlightEnabled ? 'enableHighlight' : 'disableHighlight'
+                    });
+                }
+            } catch (error) {
+                console.error('Highlight toggle error:', error);
+            }
+        });
+    }
+
     // 検索機能
     searchInput.addEventListener('input', () => {
         searchQuery = searchInput.value.trim().toLowerCase();
@@ -145,6 +179,90 @@ document.addEventListener('DOMContentLoaded', async () => {
             renderHeadings(currentHeadings);
         }
     });
+
+    // Auto-refresh 関連
+    function updateDelayDisplay() {
+        if (delayValue) delayValue.textContent = (autoRefreshDelay / 1000).toFixed(1) + 's';
+    }
+
+    function updateStatus(message, type) {
+        if (autoStatus) {
+            autoStatus.textContent = message;
+            autoStatus.className = 'auto-status' + (type ? ' ' + type : '');
+        }
+    }
+
+    async function checkForChanges() {
+        try {
+            const [tab] = await api.tabs.query({ active: true, currentWindow: true });
+            if (!tab || !tab.id) return;
+
+            const response = await api.tabs.sendMessage(tab.id, { action: 'checkForChanges' });
+            if (response && response.hasChanges) {
+                pendingUpdate = true;
+                setTimeout(async () => {
+                    if (pendingUpdate) {
+                        pendingUpdate = false;
+                        await autoDetect();
+                        updateStatus('更新: ' + new Date().toLocaleTimeString(), 'updated');
+                    }
+                }, autoRefreshDelay);
+            }
+        } catch (e) {
+            console.log('Check for changes error:', e.message);
+        }
+    }
+
+    function startAutoRefresh() {
+        if (autoRefreshInterval) return;
+        updateStatus('自動更新: ON', '');
+        autoRefreshInterval = setInterval(checkForChanges, 2000);
+    }
+
+    function stopAutoRefresh() {
+        if (autoRefreshInterval) {
+            clearInterval(autoRefreshInterval);
+            autoRefreshInterval = null;
+        }
+        pendingUpdate = false;
+    }
+
+    // 手動更新ボタン
+    if (manualRefresh) {
+        manualRefresh.addEventListener('click', async () => {
+            await autoDetect();
+            updateStatus('手動更新: ' + new Date().toLocaleTimeString(), 'updated');
+        });
+    }
+
+    // 自動更新トグル
+    if (autoToggle) {
+        autoToggle.addEventListener('click', () => {
+            autoRefreshEnabled = !autoRefreshEnabled;
+            autoToggle.classList.toggle('active', autoRefreshEnabled);
+            if (autoRefreshEnabled) {
+                startAutoRefresh();
+            } else {
+                stopAutoRefresh();
+                updateStatus('自動更新: OFF', '');
+            }
+        });
+    }
+
+    // 遅延時間調整
+    if (delayDown) {
+        delayDown.addEventListener('click', () => {
+            autoRefreshDelay = Math.max(500, autoRefreshDelay - 500);
+            updateDelayDisplay();
+        });
+    }
+
+    if (delayUp) {
+        delayUp.addEventListener('click', () => {
+            autoRefreshDelay = Math.min(5000, autoRefreshDelay + 500);
+            updateDelayDisplay();
+        });
+    }
 
     // 自動検出を実行
     async function autoDetect() {

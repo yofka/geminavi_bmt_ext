@@ -79,6 +79,12 @@
         } else if (request.action === 'clear') {
             window.HeadingDetector.clearHighlight();
             sendResponse({ success: true });
+        } else if (request.action === 'enableHighlight') {
+            window.HeadingDetector.highlight(window.HeadingDetector.headings);
+            sendResponse({ success: true });
+        } else if (request.action === 'disableHighlight') {
+            window.HeadingDetector.clearHighlight();
+            sendResponse({ success: true });
         }
         return true; // 非同期レスポンスのため
     });

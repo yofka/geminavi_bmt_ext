@@ -68,6 +68,7 @@
                             </div>
                             <button class="hd-btn-action active" id="hd-color-toggle" title="本文の色分けハイライト">Color</button>
                             <button class="hd-btn-action active" id="hd-wrap-toggle">Wrap</button>
+                            <button class="hd-btn-action" id="hd-settings-btn" title="色設定">⚙️</button>
                         </div>
                         <div class="hd-heading-list" id="hd-heading-list">
                             <ul class="hd-heading-tree" id="hd-tree"></ul>
@@ -222,6 +223,7 @@
                 }
                 .hd-button-row {
                     display: flex;
+                    flex-wrap: wrap;
                     align-items: center;
                     gap: 6px;
                     padding: 8px 10px;
@@ -635,6 +637,15 @@
                     } else {
                         window.HeadingDetector.clearHighlight();
                     }
+                }
+            });
+
+            // Settings ボタン
+            document.getElementById('hd-settings-btn').addEventListener('click', function () {
+                if (window.HDSettings) {
+                    window.HDSettings.open(() => {
+                        // 色が変更されたときにUIを更新
+                    });
                 }
             });
 
