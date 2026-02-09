@@ -32,7 +32,13 @@
         }
         if (request.action === 'detect') {
             window.HeadingDetector.detect(); // Use global HeadingDetector
-            window.HeadingDetector.highlight(window.HeadingDetector.headings);
+
+            // highlightEnabled が指定されている場合のみハイライト
+            if (request.highlightEnabled) {
+                window.HeadingDetector.highlight(window.HeadingDetector.headings);
+            } else {
+                window.HeadingDetector.clearHighlight();
+            }
 
             // 変更検出用に現在の状態を保存
             lastDetectedHeadingCount = window.HeadingDetector.headings.length;

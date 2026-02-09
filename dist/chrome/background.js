@@ -127,6 +127,22 @@ api.runtime.onMessage.addListener((request, sender, sendResponse) => {
         return true;
     }
 
+    if (request.action === 'saveHighlightEnabled') {
+        (async () => {
+            await saveConfig({ highlightEnabled: request.enabled });
+            sendResponse({ success: true });
+        })();
+        return true;
+    }
+
+    if (request.action === 'saveHighlightColors') {
+        (async () => {
+            await saveConfig({ highlightColors: request.colors });
+            sendResponse({ success: true });
+        })();
+        return true;
+    }
+
     // インページパネルのトグル
     if (request.action === 'togglePanel') {
         (async () => {

@@ -31,10 +31,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     let expandLevel = 2.5;
     let wrapEnabled = false;
     let hBadgeEnabled = false; // Hバッジ表示のデフォルトはオフ
+    let highlightEnabled = false; // ハイライトのデフォルトはオフ
     let currentMode = 'sidepanel';
 
     // Hバッジトグル
     const hBadgeToggle = document.getElementById('hBadgeToggle');
+    const highlightToggle = document.getElementById('highlightToggle');
 
     // Auto-refresh 状態
     let autoRefreshEnabled = true;
@@ -63,9 +65,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                 currentMode = config.displayMode || 'sidepanel';
                 wrapEnabled = config.wrap || false;
                 hBadgeEnabled = config.hBadgeEnabled || false;
+                highlightEnabled = config.highlightEnabled || false;
                 updateExpandBtns();
                 updateWrapBtn();
                 updateHBadgeToggle();
+                updateHighlightToggle();
                 updateModeToggle();
                 // 色設定を適用
                 if (window.HDSettings) {
@@ -166,14 +170,19 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
-    // Color ボタン（本文の色分けトグル）
-    let highlightEnabled = true;
-    const colorBtn = document.getElementById('colorBtn');
-    if (colorBtn) {
-        colorBtn.addEventListener('click', async () => {
-            highlightEnabled = !highlightEnabled;
-            colorBtn.classList.toggle('active', highlightEnabled);
+    // ハイライトトグルUI更新
+    function updateHighlightToggle() {
+        if (highlightToggle) {
+            highlightToggle.checked = highlightEnabled;
+        }
+    }
+
+    // ハイライトトグルイベント
+    if (highlightToggle) {
+        highlightToggle.addEventListener('change', async () => {
+            highlightEnabled = highlightToggle.checked;
             try {
+                await api.runtime.sendMessage({ action: 'saveHighlightEnabled', enabled: highlightEnabled });
                 const [tab] = await api.tabs.query({ active: true, currentWindow: true });
                 if (tab && tab.id) {
                     await api.tabs.sendMessage(tab.id, {
@@ -346,7 +355,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             for (let attempt = 0; attempt < maxAttempts; attempt++) {
                 try {
-                    response = await api.tabs.sendMessage(tab.id, { action: 'detect' });
+                    response = await api.tabs.sendMessage(tab.id, { action: 'detect', highlightEnabled: highlightEnabled });
                     if (response && response.success) {
                         break;
                     }
@@ -465,9 +474,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             const row = document.createElement('div');
             row.className = 'tree-row';
-            // レベルを data 属性として設定（CSS セレクタ用）
-            const levelKey = node.heading.isQuery ? 'query' : node.heading.isResponse ? 'response' : Math.floor(node.level);
-            row.dataset.level = levelKey;
+
+            // レベル属性を設定（CSSでの色分け用）
+            if (node.heading.isQuery) {
+                row.dataset.level = 'query';
+            } else if (node.heading.isResponse) {
+                row.dataset.level = 'response';
+            } else {
+                const displayLevel = node.heading.originalLevel || Math.floor(node.heading.level);
+                row.dataset.level = displayLevel.toString();
+            }
 
             const hasChildren = node.children.length > 0;
             const inGemini = parentInGemini || isInGeminiConversation(node);
