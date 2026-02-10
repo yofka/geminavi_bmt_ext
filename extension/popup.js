@@ -164,8 +164,24 @@ document.addEventListener('DOMContentLoaded', async () => {
     const settingsBtn = document.getElementById('settingsBtn');
     if (settingsBtn && window.HDSettings) {
         settingsBtn.addEventListener('click', () => {
-            window.HDSettings.open(() => {
-                // 色が変更されたときにUIを更新
+            window.HDSettings.open(async (colors) => {
+                // 色が変更されたときにUIを更新 & ハイライト再適用
+                if (highlightEnabled) {
+                    try {
+                        const [tab] = await api.tabs.query({ active: true, currentWindow: true });
+                        if (tab && tab.id) {
+                            const hlColors = {
+                                h1: colors.h1Highlight, h2: colors.h2Highlight,
+                                h3: colors.h3Highlight, h4: colors.h4Highlight,
+                                h5: colors.h5Highlight, h6: colors.h6Highlight,
+                                query: colors.queryHighlight, response: colors.responseHighlight
+                            };
+                            await api.tabs.sendMessage(tab.id, {
+                                action: 'updateHighlightColors', highlightColors: hlColors
+                            });
+                        }
+                    } catch (e) { /* ignore */ }
+                }
             });
         });
     }
@@ -353,9 +369,21 @@ document.addEventListener('DOMContentLoaded', async () => {
             let lastError = null;
             const maxAttempts = 3;
 
+            // ハイライト色を設定から取得
+            const highlightColors = window.HDSettings ? {
+                h1: window.HDSettings.colors.h1Highlight,
+                h2: window.HDSettings.colors.h2Highlight,
+                h3: window.HDSettings.colors.h3Highlight,
+                h4: window.HDSettings.colors.h4Highlight,
+                h5: window.HDSettings.colors.h5Highlight,
+                h6: window.HDSettings.colors.h6Highlight,
+                query: window.HDSettings.colors.queryHighlight,
+                response: window.HDSettings.colors.responseHighlight
+            } : null;
+
             for (let attempt = 0; attempt < maxAttempts; attempt++) {
                 try {
-                    response = await api.tabs.sendMessage(tab.id, { action: 'detect', highlightEnabled: highlightEnabled });
+                    response = await api.tabs.sendMessage(tab.id, { action: 'detect', highlightEnabled: highlightEnabled, highlightColors: highlightColors });
                     if (response && response.success) {
                         break;
                     }

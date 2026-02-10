@@ -1,5 +1,5 @@
 // Heading Detector Bookmarklet (Combined)
-// Generated: 2026-02-09T12:47:06.397Z
+// Generated: 2026-02-09T23:36:46.173Z
 
 /**
  * Heading Detector - スタイル解析による見出し検出
@@ -583,14 +583,14 @@
         mainPaneIndicator: '#ffffff',
         toggleBtn: '#888888',
         // 各レベルの設定
-        h1Bg: '#000000', h1Text: '#666666', h1Border: '#000000', h1LinkText: '#a8c7fa',
-        h2Bg: '#000000', h2Text: '#666666', h2Border: '#000000', h2LinkText: '#a8c7fa',
-        h3Bg: '#000000', h3Text: '#666666', h3Border: '#000000', h3LinkText: '#a8c7fa',
-        h4Bg: '#000000', h4Text: '#666666', h4Border: '#000000', h4LinkText: '#a8c7fa',
-        h5Bg: '#000000', h5Text: '#666666', h5Border: '#000000', h5LinkText: '#a8c7fa',
-        h6Bg: '#000000', h6Text: '#666666', h6Border: '#000000', h6LinkText: '#a8c7fa',
-        queryBg: '#000000', queryText: '#666666', queryBorder: '#000000', queryLinkText: '#a8c7fa',
-        responseBg: '#000000', responseText: '#666666', responseBorder: '#000000', responseLinkText: '#a8c7fa'
+        h1Bg: '#000000', h1Text: '#666666', h1Border: '#000000', h1LinkText: '#a8c7fa', h1Highlight: 'rgba(255, 107, 107, 0.3)',
+        h2Bg: '#000000', h2Text: '#666666', h2Border: '#000000', h2LinkText: '#a8c7fa', h2Highlight: 'rgba(255, 159, 67, 0.3)',
+        h3Bg: '#000000', h3Text: '#666666', h3Border: '#000000', h3LinkText: '#a8c7fa', h3Highlight: 'rgba(255, 220, 0, 0.3)',
+        h4Bg: '#000000', h4Text: '#666666', h4Border: '#000000', h4LinkText: '#a8c7fa', h4Highlight: 'rgba(72, 219, 251, 0.3)',
+        h5Bg: '#000000', h5Text: '#666666', h5Border: '#000000', h5LinkText: '#a8c7fa', h5Highlight: 'rgba(162, 155, 254, 0.3)',
+        h6Bg: '#000000', h6Text: '#666666', h6Border: '#000000', h6LinkText: '#a8c7fa', h6Highlight: 'rgba(200, 200, 200, 0.3)',
+        queryBg: '#000000', queryText: '#666666', queryBorder: '#000000', queryLinkText: '#a8c7fa', queryHighlight: 'rgba(100, 200, 255, 0.3)',
+        responseBg: '#000000', responseText: '#666666', responseBorder: '#000000', responseLinkText: '#a8c7fa', responseHighlight: 'rgba(180, 130, 255, 0.3)'
     };
 
     const HDSettings = {
@@ -670,7 +670,11 @@
                 { key: 'query', label: '💬Q' },
                 { key: 'response', label: '💭A' }
             ];
-            return levels.map(l => `
+            return levels.map(l => {
+                // rgba色からhex色とアルファを抽出するヘルパー
+                const highlightColor = this.colors[l.key + 'Highlight'] || 'rgba(200, 200, 200, 0.3)';
+                const hexColor = this.rgbaToHex(highlightColor);
+                return `
                 <div class="hd-badge-row">
                     <span class="hd-badge-preview" id="hd-badge-preview-${l.key}" 
                           style="background:${this.colors[l.key + 'Bg']};color:${this.colors[l.key + 'Text']};border:1px solid ${this.colors[l.key + 'Border']};">
@@ -693,9 +697,33 @@
                             <span>見出し</span>
                             <input type="color" id="hd-color-${l.key}LinkText" value="${this.colors[l.key + 'LinkText']}">
                         </div>
+                        <div class="hd-color-item">
+                            <span class="hd-highlight-preview" style="background:${highlightColor};">HL</span>
+                            <input type="color" id="hd-color-${l.key}Highlight" value="${hexColor}">
+                        </div>
                     </div>
                 </div>
-            `).join('');
+            `}).join('');
+        },
+
+        // rgba色からhex色を抽出
+        rgbaToHex: function (rgba) {
+            const match = rgba.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+            if (match) {
+                const r = parseInt(match[1]).toString(16).padStart(2, '0');
+                const g = parseInt(match[2]).toString(16).padStart(2, '0');
+                const b = parseInt(match[3]).toString(16).padStart(2, '0');
+                return '#' + r + g + b;
+            }
+            return '#cccccc';
+        },
+
+        // hex色をrgba色に変換（透明度0.3固定）
+        hexToRgba: function (hex) {
+            const r = parseInt(hex.slice(1, 3), 16);
+            const g = parseInt(hex.slice(3, 5), 16);
+            const b = parseInt(hex.slice(5, 7), 16);
+            return `rgba(${r}, ${g}, ${b}, 0.3)`;
         },
 
         // 設定ダイアログのCSS生成
@@ -972,7 +1000,12 @@
             Object.keys(this.colors).forEach(key => {
                 const input = document.getElementById('hd-color-' + key);
                 if (input) {
-                    input.value = this.colors[key];
+                    // Highlight色はrgbaからhexに変換
+                    if (key.endsWith('Highlight')) {
+                        input.value = this.rgbaToHex(this.colors[key]);
+                    } else {
+                        input.value = this.colors[key];
+                    }
                 }
             });
             // Hバッジチェックボックスも更新
@@ -987,7 +1020,12 @@
             Object.keys(this.colors).forEach(key => {
                 const input = document.getElementById('hd-color-' + key);
                 if (input) {
-                    this.colors[key] = input.value;
+                    // Highlight色はhexからrgbaに変換
+                    if (key.endsWith('Highlight')) {
+                        this.colors[key] = this.hexToRgba(input.value);
+                    } else {
+                        this.colors[key] = input.value;
+                    }
                 }
             });
         },

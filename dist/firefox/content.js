@@ -31,6 +31,11 @@
             return true;
         }
         if (request.action === 'detect') {
+            // ハイライト色を設定から取得して適用
+            if (request.highlightColors) {
+                window.HeadingDetector.config.highlightColors = request.highlightColors;
+            }
+
             window.HeadingDetector.detect(); // Use global HeadingDetector
 
             // highlightEnabled が指定されている場合のみハイライト
@@ -90,6 +95,13 @@
             sendResponse({ success: true });
         } else if (request.action === 'disableHighlight') {
             window.HeadingDetector.clearHighlight();
+            sendResponse({ success: true });
+        } else if (request.action === 'updateHighlightColors') {
+            if (request.highlightColors) {
+                window.HeadingDetector.config.highlightColors = request.highlightColors;
+            }
+            // 再ハイライト
+            window.HeadingDetector.highlight(window.HeadingDetector.headings);
             sendResponse({ success: true });
         }
         return true; // 非同期レスポンスのため
