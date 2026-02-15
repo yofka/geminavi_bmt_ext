@@ -234,6 +234,29 @@ javascript: (function () {
             if (addedElements.has(h)) return;
             var text = h.textContent.trim();
             if (!text || text.length < 2) return;
+
+            // ★ query-text クラスを含む要素はクエリ（Q, level 2）として強制扱い
+            if (h.className && h.className.includes('query-text')) {
+                var clone = h.cloneNode(true);
+                var hiddens = clone.querySelectorAll('.cdk-visually-hidden, [class*="visually-hidden"]');
+                hiddens.forEach(function (hidden) { hidden.remove(); });
+                text = clone.textContent.trim();
+                text = text.replace(/^\s*(You said|Gemini said|君が言った|あなたが言った|質問者|User says|You|あなた)\b\s*/i, '');
+                if (!text || text.length < 2) return;
+                addedElements.add(h);
+                allHeadings.push({
+                    element: h,
+                    text: text.substring(0, 100),
+                    level: 2,
+                    score: 100,
+                    isNative: true,
+                    isQuery: true,
+                    isResponse: false,
+                    isInMainPane: isInMainPane(h, mainPane)
+                });
+                return;
+            }
+
             var lvl = h.tagName.match(/^H([1-6])$/) ? parseInt(h.tagName.charAt(1)) : (parseInt(h.getAttribute('aria-level')) || 3);
             var inMain = isInMainPane(h, mainPane);
             addedElements.add(h);

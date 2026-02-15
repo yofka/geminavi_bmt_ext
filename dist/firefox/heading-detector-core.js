@@ -81,7 +81,7 @@
     },
 
     // Geminiのチャット要素を検出
-    detectGeminiChatItems: function () {
+    detectGeminiChatItems: function (addedElements) {
       const items = [];
       const hostname = window.location.hostname;
 
@@ -91,7 +91,7 @@
 
       // Shadow DOM 内も含めて要素を検索する関数
       const querySelectorAllDeep = (selector, root = document) => {
-        const results = [...root.querySelectorAll(selector)];
+        let results = [...root.querySelectorAll(selector)];
         // Shadow DOM を持つ要素を探す
         root.querySelectorAll('*').forEach(el => {
           if (el.shadowRoot) {
@@ -101,46 +101,65 @@
         return results;
       };
 
-      // ユーザーのクエリを検出 - H2タグまたは role="heading" aria-level="2" の要素
-      const queryHeadings = querySelectorAllDeep('h2, [role="heading"][aria-level="2"]');
+      // ユーザーのクエリを検出
+      // 最近のGeminiは H5 または aria-level="5" を使用しているため、セレクタを拡張
+      // また、class="query-text" や .user-query-bubble-with-background を優先的に探索
+      // クラス名の揺れ（collapsed等）に対応するため、属性セレクタを使用
+      const queryCandidates = querySelectorAllDeep('h2, h5, [class*="query-text"], .user-query-bubble-with-background, [role="heading"][aria-level="2"], [role="heading"][aria-level="5"], [data-message-author-role="user"]');
 
-      queryHeadings.forEach((h2) => {
-        const text = h2.textContent.trim();
-        const inMainPane = this.mainPane ? this.mainPane.contains(h2) : true;
-        const inModelResponse = h2.closest('[data-message-author-role="model"]') ||
-          h2.closest('.model-response') ||
-          h2.closest('[class*="model-response"]');
+      queryCandidates.forEach((el) => {
+        // Geminiチャット項目については、常にメインペイン内として扱う
+        // const inMainPane = this.mainPane ? this.mainPane.contains(el) : true;
+        // if (this.mainPane && !inMainPane) return;
 
+        // クエリ（ユーザーメッセージ）かどうかの判定
+        const isUserMsg = el.className.includes('query-text') ||
+          el.closest('.user-query-bubble-with-background') ||
+          el.getAttribute('data-message-author-role') === 'user' ||
+          el.closest('[data-message-author-role="user"]');
 
+        if (!isUserMsg) return;
 
-        if (this.mainPane && !inMainPane) return;
-        // 回答コンテナ内のH2は除外（回答内見出しとして別途処理）
-        if (inModelResponse) return;
+        // すでに処理済みの要素の子要素ならスキップ（重複検出防止）
+        let isDescendantOfAdded = false;
+        addedElements.forEach(added => {
+          if (added !== el && added.contains(el)) isDescendantOfAdded = true;
+        });
+        if (isDescendantOfAdded) return;
+
+        // テキストの取得（cdk-visually-hidden要素を除外）
+        let text = "";
+        const clone = el.cloneNode(true);
+        // cdk-visually-hidden または hidden 属性、または特定のクラスを除去
+        clone.querySelectorAll('.cdk-visually-hidden, [class*="visually-hidden"], .cdk-visually-hidden-host').forEach(hidden => hidden.remove());
+        text = clone.textContent.trim();
+
+        // 不要な接頭辞の削除
+        text = text.replace(/^\s*(You said|君が言った|あなたが言った|質問者|User says|You|あなた)\b\s*/i, '');
 
         if (!text || text.length < 2) return;
 
-        // テキストで重複チェック
-        if (processedTexts.has(text)) return;
-        processedTexts.add(text);
+        // 要素を登録（同じ要素を複数回追加しない）
+        if (addedElements.has(el)) return;
+        addedElements.add(el);
 
         items.push({
-          element: h2,
+          element: el,
           text: text.substring(0, 100),
-          level: 2,
+          level: 2, // クエリは常にレベル2（Q）として扱う
           isQuery: true,
           isResponse: false,
-          isNative: true,
+          isNative: el.tagName.startsWith('H') || el.getAttribute('role') === 'heading',
           isInMainPane: true
         });
       });
 
       // AIの回答（model-response）の冒頭部分を検出
-      const modelResponses = document.querySelectorAll('[data-message-author-role="model"], .model-response, [class*="model-response"]');
+      // 回答も Shadow DOM 内にある可能性があるため querySelectorAllDeep を使用
+      const modelResponses = querySelectorAllDeep('[data-message-author-role="model"], .model-response, [class*="model-response"]');
       const processedResponses = new Set();
 
       modelResponses.forEach((resp) => {
-        if (this.mainPane && !this.mainPane.contains(resp)) return;
-
         // 既に処理済みの応答コンテナはスキップ（親子関係の重複防止）
         let isChildOfProcessed = false;
         processedResponses.forEach((pr) => {
@@ -150,13 +169,23 @@
         processedResponses.add(resp);
 
         // 回答内の最初の段落またはテキストブロックを取得
-        let firstPara = resp.querySelector('p, .markdown-content > *:first-child, [class*="response-text"] > *:first-child');
+        // より広いセレクタで試行
+        let firstPara = resp.querySelector('p, .markdown-content > *:first-child, [class*="response-text"] *:first-child, .model-response-text *:first-child');
+        if (!firstPara) {
+          // Shadow DOM内も探す
+          if (resp.shadowRoot) {
+            firstPara = resp.shadowRoot.querySelector('p, .markdown-content > *:first-child');
+          }
+        }
         if (!firstPara) {
           // フォールバック: 直接のテキストノードを探す
           const walker = document.createTreeWalker(resp, NodeFilter.SHOW_TEXT, null, false);
-          const firstText = walker.nextNode();
-          if (firstText && firstText.textContent.trim().length > 10) {
-            firstPara = firstText.parentElement;
+          let firstText;
+          while (firstText = walker.nextNode()) {
+            if (firstText.textContent.trim().length > 10) {
+              firstPara = firstText.parentElement;
+              break;
+            }
           }
         }
 
@@ -186,9 +215,16 @@
         }
 
         // 回答内のHタグも見出しとして抽出
-        // レベルを 2.5 + (元レベル/10) にして、必ず回答の子要素になるようにする
-        const responseHeadings = resp.querySelectorAll('h1, h2, h3, h4, h5, h6');
+        // 回答内見出しも Shadow DOM 内にある可能性がある。
+        const responseHeadings = resp.shadowRoot ?
+          [...resp.querySelectorAll('h1, h2, h3, h4, h5, h6'), ...resp.shadowRoot.querySelectorAll('h1, h2, h3, h4, h5, h6')] :
+          resp.querySelectorAll('h1, h2, h3, h4, h5, h6');
+
         responseHeadings.forEach((h) => {
+          // 回答内の見出しでも、classにquery-textが含まれる場合はクエリ(Q)として扱う
+          const isActuallyQuery = h.className.includes('query-text') || h.closest('[class*="query-text"]');
+          if (isActuallyQuery) return; // queryCandidatesのループで処理されるのを待つか、ここでQとして追加
+
           const text = h.textContent.trim();
           if (!text || text.length < 2) return;
           if (processedTexts.has(text)) return;
@@ -197,9 +233,14 @@
           const originalLvl = parseInt(h.tagName.charAt(1));
           // H1→2.51, H2→2.52, H3→2.53... として回答(2.5)の子に配置
           const effectiveLevel = 2.5 + (originalLvl / 10);
+
+          // "Gemini said", "You said" 等の見出し項目をクリーンアップ
+          let cleanText = text.replace(/^\s*(Gemini said|You said|君が言った|あなたが言った|質問者|User says|You|あなた)\b\s*/i, '');
+          if (!cleanText || cleanText.length < 2) return;
+
           items.push({
             element: h,
-            text: text.substring(0, 100),
+            text: cleanText.substring(0, 100),
             level: effectiveLevel,
             originalLevel: originalLvl,  // 表示用に元のレベルを保持
             isQuery: false,
@@ -395,7 +436,7 @@
 
       // Gemini専用のチャット検出
       if (hostname.includes('gemini.google.com')) {
-        const chatItems = this.detectGeminiChatItems();
+        const chatItems = this.detectGeminiChatItems(addedElements);
         chatItems.forEach((item) => {
           if (!addedElements.has(item.element)) {
             addedElements.add(item.element);
@@ -409,8 +450,32 @@
       nativeHeadings.forEach((h) => {
         if (addedElements.has(h)) return; // 既に追加済みならスキップ
 
-        const text = h.textContent.trim();
+        let text = h.textContent.trim();
         if (!text || text.length < 2) return;
+
+        // ★ query-text クラスを含む要素は、H5等であっても常にクエリ（Q, level 2）として強制扱い
+        const isQueryTextElement = h.className && h.className.includes('query-text');
+        if (isQueryTextElement) {
+          // cdk-visually-hidden 等を除去してクリーンなテキストを取得
+          const clone = h.cloneNode(true);
+          clone.querySelectorAll('.cdk-visually-hidden, [class*="visually-hidden"]').forEach(hidden => hidden.remove());
+          text = clone.textContent.trim();
+          text = text.replace(/^\s*(You said|Gemini said|君が言った|あなたが言った|質問者|User says|You|あなた)\b\s*/i, '');
+          if (!text || text.length < 2) return;
+
+          addedElements.add(h);
+          allHeadings.push({
+            element: h,
+            text: text.substring(0, 100),
+            level: 2,       // H1直下にぶら下がるようレベル2
+            score: 100,
+            isNative: true,
+            isQuery: true,   // Q バッジ
+            isResponse: false,
+            isInMainPane: true
+          });
+          return; // この要素は Q として処理済み、通常の H5 としては追加しない
+        }
 
         const lvl = h.tagName.match(/^H([1-6])$/) ? parseInt(h.tagName.charAt(1)) : (parseInt(h.getAttribute('aria-level')) || 3);
         const inMain = this.isInMainPane(h);

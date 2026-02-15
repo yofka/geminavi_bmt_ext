@@ -68,6 +68,59 @@ body {
   font-size: 11px;
   color: var(--text-secondary);
   margin-left: auto;
+  margin-right: 8px;
+}
+
+.header-hint {
+  background: transparent;
+  border: none;
+  font-size: 14px;
+  cursor: pointer;
+  opacity: 0.5;
+  transition: opacity 0.2s;
+  padding: 2px 4px;
+}
+
+.header-hint:hover {
+  opacity: 1;
+}
+
+/* コントロール・オーバーレイ・コンテナ */
+.controls-container {
+  position: relative;
+  background: var(--bg-primary);
+  border-radius: var(--border-radius);
+  z-index: 100;
+}
+
+.hover-trigger {
+  padding-bottom: 4px;
+}
+
+.tools-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  background: var(--bg-primary);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-5px);
+  transition: all 0.2s ease;
+  z-index: 101;
+  padding: 2px;
+  border: 1px solid var(--bg-tertiary);
+  border-radius: var(--border-radius);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.controls-container:hover .tools-overlay {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
 }
 
 /* 検索バー */
@@ -101,7 +154,7 @@ body {
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
-  padding: 8px 10px;
+  padding: 3px 6px;
   background: var(--bg-secondary);
   border-radius: var(--border-radius);
 }
@@ -395,23 +448,14 @@ body {
   text-overflow: ellipsis;
 }
 
-/* 自動更新バー（上部に移動） */
-.auto-refresh-bar {
-  margin-bottom: 8px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid var(--bg-tertiary);
-  text-align: center;
-}
-
-/* 自動更新コントロール */
+/* 自動更新バー（オーバーレイ内） */
 .auto-refresh-row {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 8px;
+  gap: 5px;
+  padding: 3px 6px;
   background: var(--bg-secondary);
   border-radius: 6px;
-  margin-bottom: 8px;
   flex-wrap: wrap;
 }
 
