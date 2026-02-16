@@ -235,6 +235,8 @@ javascript: (function () {
             var text = h.textContent.trim();
             if (!text || text.length < 2) return;
 
+            // "Gemini said" 等のレスポンスラベルは目次から除外
+            if (/^(Gemini said|Geminiが言いました|Gemini の回答)$/i.test(text)) return;
             // ★ query-text クラスを含む要素はクエリ（Q, level 2）として強制扱い
             if (h.className && h.className.includes('query-text')) {
                 var clone = h.cloneNode(true);
