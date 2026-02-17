@@ -17,12 +17,14 @@ const api = typeof browser !== 'undefined' ? browser : chrome;
 // 設定を読み込む
 async function getConfig() {
     try {
-        const result = await api.storage.local.get(['displayMode', 'expandLevel', 'wrap', 'colors']);
+        const result = await api.storage.local.get(['displayMode', 'expandLevel', 'wrap', 'colors', 'hBadgeEnabled', 'highlightEnabled']);
         return {
             displayMode: result.displayMode || DEFAULT_CONFIG.displayMode,
             expandLevel: result.expandLevel !== undefined ? result.expandLevel : DEFAULT_CONFIG.expandLevel,
             wrap: result.wrap !== undefined ? result.wrap : DEFAULT_CONFIG.wrap,
-            colors: result.colors || DEFAULT_CONFIG.colors
+            colors: result.colors || DEFAULT_CONFIG.colors,
+            hBadgeEnabled: result.hBadgeEnabled !== undefined ? result.hBadgeEnabled : false,
+            highlightEnabled: result.highlightEnabled !== undefined ? result.highlightEnabled : false
         };
     } catch (error) {
         console.error('Failed to load config:', error);

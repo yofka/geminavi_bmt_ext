@@ -32,19 +32,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     const hBadgeToggle = document.getElementById('hBadgeToggle');
     const highlightToggle = document.getElementById('highlightToggle');
 
-    // 自動更新機能
-    let autoRefreshEnabled = true;
-    let autoRefreshDelay = 1500; // ミリ秒
-    let autoRefreshInterval = null;
-    let pendingUpdate = false;
 
-    // 自動更新UI要素
-    const manualRefresh = document.getElementById('manualRefresh');
-    const autoToggle = document.getElementById('autoToggle');
-    const delayDown = document.getElementById('delayDown');
-    const delayUp = document.getElementById('delayUp');
-    const delayValue = document.getElementById('delayValue');
-    const autoStatus = document.getElementById('autoStatus');
+
+
 
     // 展開レベルオプション
     const levelOptions = [1, 2, 2.5, 3, 4, 5, 6];
@@ -276,11 +266,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         pendingUpdate = false;
     }
 
-    // 手動更新ボタン
-    manualRefresh.addEventListener('click', async () => {
-        await autoDetect();
-        updateStatus('手動更新: ' + new Date().toLocaleTimeString(), 'updated');
-    });
+
 
     // 自動更新トグル
     autoToggle.addEventListener('click', () => {
@@ -643,14 +629,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 初期化
     renderExpandBtns();
-    updateDelayDisplay();
     await loadConfig();
     await autoDetect();
-
-    // 自動更新開始
-    if (autoRefreshEnabled) {
-        startAutoRefresh();
-    }
 });
 
 console.log('DOMContentLoaded listener registered.'); // 追加

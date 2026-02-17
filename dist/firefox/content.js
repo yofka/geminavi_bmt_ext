@@ -12,21 +12,58 @@
     // API名前空間の抽象化（Firefox/Chrome両対応）
     const api = typeof browser !== 'undefined' ? browser : chrome;
 
-
-
-    // 変更検出用の状態
-    let lastDetectedHeadingCount = 0;
-    let lastDetectedHeadingHash = '';
-
-    // 見出しのハッシュを計算（簡易的な変更検出）
-    function computeLocalHash(headings) {
-        return headings.map(h => h.text.substring(0, 20) + h.level).join('|');
+    // HeadingDetector がロードされていることを確認
+    if (typeof window.HeadingDetector === 'undefined') {
+        console.warn('HeadingDetector is not loaded. Content script cannot function.');
+        return;
     }
+
+    let detectTimeout = null;
+    const DETECT_DEBOUNCE_TIME = 500; // ms
+
+    // サイドパネルにDOM変更を通知する関数 (デバウンス付き)
+    function notifyDomChangedDebounced() {
+        if (detectTimeout) {
+            clearTimeout(detectTimeout);
+        }
+        detectTimeout = setTimeout(async () => {
+            try {
+                // サイドパネルやポップアップが閉じている場合はエラーになるが、問題ない
+                await api.runtime.sendMessage({ action: 'domChanged' });
+            } catch (e) {
+                // console.log("Could not send domChanged message:", e.message); // デバッグ用
+            }
+        }, DETECT_DEBOUNCE_TIME);
+    }
+
+    // MutationObserver の設定
+    const observer = new MutationObserver((mutationsList, observer) => {
+        let relevantChange = false;
+        for (const mutation of mutationsList) {
+            // 子ノードの追加/削除、テキストコンテンツの変更、または特定の属性（class, style）の変更を検出
+            if (mutation.type === 'childList' || mutation.type === 'characterData' ||
+                (mutation.type === 'attributes' && (mutation.attributeName === 'class' || mutation.attributeName === 'style'))) {
+                relevantChange = true;
+                break;
+            }
+        }
+        if (relevantChange) {
+            notifyDomChangedDebounced();
+        }
+    });
+
+    // ページ全体のDOM変更を監視
+    // 監視オプション:
+    // childList: 子ノードの追加または削除を監視
+    // subtree: descendant node の変更も監視
+    // attributes: 属性の変更を監視
+    // characterData: テキストコンテンツの変更を監視
+    observer.observe(document.body, { childList: true, subtree: true, attributes: true, characterData: true });
+
 
     // メッセージリスナー（ポップアップからの指示を受信）
     api.runtime.onMessage.addListener((request, sender, sendResponse) => {
         if (request.action === 'ping') {
-            // コンテンツスクリプトが準備完了しているか確認用
             sendResponse({ success: true, ready: true });
             return true;
         }
@@ -45,10 +82,6 @@
                 window.HeadingDetector.clearHighlight();
             }
 
-            // 変更検出用に現在の状態を保存
-            lastDetectedHeadingCount = window.HeadingDetector.headings.length;
-            lastDetectedHeadingHash = computeLocalHash(window.HeadingDetector.headings);
-
             // 要素を除いたデータを返す
             const result = window.HeadingDetector.headings.map((h, index) => ({
                 index: index,
@@ -64,20 +97,6 @@
             }));
 
             sendResponse({ success: true, headings: result });
-        } else if (request.action === 'checkForChanges') {
-            // DOM変更を検出（軽量チェック）
-            window.HeadingDetector.detect(); // Re-detect to get latest state
-            const currentDetectedHeadingCount = window.HeadingDetector.headings.length;
-            const currentDetectedHeadingHash = computeLocalHash(window.HeadingDetector.headings);
-            const hasChanges = (currentDetectedHeadingCount !== lastDetectedHeadingCount) || (currentDetectedHeadingHash !== lastDetectedHeadingHash);
-
-            // Update for next check
-            if (hasChanges) {
-                lastDetectedHeadingCount = currentDetectedHeadingCount;
-                lastDetectedHeadingHash = currentDetectedHeadingHash;
-            }
-
-            sendResponse({ success: true, hasChanges: hasChanges });
         } else if (request.action === 'scrollTo') {
             const heading = window.HeadingDetector.headings[request.index];
             if (heading && heading.element) {

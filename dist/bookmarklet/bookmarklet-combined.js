@@ -1,5 +1,5 @@
 // Heading Detector Bookmarklet (Combined)
-// Generated: 2026-02-15T14:02:26.713Z
+// Generated: 2026-02-17T14:08:24.380Z
 
 /**
  * Heading Detector - スタイル解析による見出し検出
