@@ -227,35 +227,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     function startAutoRefresh() {
-        stopAutoRefresh();
-        if (!autoRefreshEnabled) return;
-
-        autoRefreshInterval = setInterval(async () => {
-            if (pendingUpdate) return;
-
-            try {
-                const [tab] = await api.tabs.query({ active: true, currentWindow: true });
-
-                // コンテンツスクリプトに変更があるか確認
-                const response = await api.tabs.sendMessage(tab.id, { action: 'checkForChanges' });
-
-                if (response && response.hasChanges) {
-                    pendingUpdate = true;
-                    updateStatus('変更検出中...', 'pending');
-
-                    // デバウンス後に再検出
-                    setTimeout(async () => {
-                        await autoDetect();
-                        updateStatus('自動更新: ' + new Date().toLocaleTimeString(), 'updated');
-                        pendingUpdate = false;
-                    }, autoRefreshDelay);
-                }
-            } catch (e) {
-                // エラーは無視（タブが閉じられた等）
-            }
-        }, 1000); // 1秒毎にチェック
-
-        updateStatus('自動更新: ON', '');
+        // メッセージベースの更新に移行したため、ポーリング(setInterval)は廃止
+        updateStatus('自動更新: ON (待機中)', '');
     }
 
     function stopAutoRefresh() {
@@ -631,6 +604,26 @@ document.addEventListener('DOMContentLoaded', async () => {
     renderExpandBtns();
     await loadConfig();
     await autoDetect();
+
+    // メッセージリスナー（コンテンツスクリプトからの通知を受信）
+    api.runtime.onMessage.addListener((request, sender, sendResponse) => {
+        if (request.action === 'domChanged') {
+            console.log('Received domChanged message');
+            if (autoRefreshEnabled && !pendingUpdate) {
+                pendingUpdate = true;
+                updateStatus('変更検出中...', 'pending');
+
+                // 設定された遅延時間（autoRefreshDelay）待機してから検出実行
+                setTimeout(async () => {
+                    await autoDetect();
+                    updateStatus('自動更新: ' + new Date().toLocaleTimeString(), 'updated');
+                    pendingUpdate = false;
+                }, autoRefreshDelay);
+            }
+        }
+        sendResponse({ success: true });
+        return true;
+    });
 });
 
 console.log('DOMContentLoaded listener registered.'); // 追加
